@@ -14,8 +14,17 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 
   // Prisma / Postgres (Supabase)
+  // DATABASE_URL connects as `app_user` (RLS-constrained) — the default
+  // client, used for request-scoped queries via src/lib/db/rls.ts#forUser.
   DATABASE_URL: z.string().url(),
+  // DIRECT_URL connects as the `postgres` owner role — Prisma CLI only
+  // (migrate/introspect/studio), never imported by app runtime code.
   DIRECT_URL: z.string().url(),
+  // SERVICE_DATABASE_URL connects as `service_role_app` (BYPASSRLS) — used
+  // only by trusted system code (background jobs, seed scripts) that isn't
+  // acting on behalf of one specific user's request. See
+  // docs/phase-0/04-database-design.md §5 and the rls_and_roles migration.
+  SERVICE_DATABASE_URL: z.string().url(),
 
   // Supabase Auth
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),

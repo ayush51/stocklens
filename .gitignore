@@ -53,3 +53,6 @@ prisma/generated/
 .claude/settings.local.json
 
 /src/generated/prisma
+
+# supabase CLI local state (project ref only, no secrets — still not shared config)
+supabase/.temp/

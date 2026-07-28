@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import type { User } from "@supabase/supabase-js";
 
-import { prisma } from "@/lib/db/prisma";
+import { forUser, executeAsUser } from "@/lib/db/rls";
+import { Prisma } from "@/generated/prisma/client";
 
 /**
  * Idempotent tenancy bootstrap: mirrors the Supabase Auth user into our
@@ -12,8 +14,20 @@ import { prisma } from "@/lib/db/prisma";
  * This application-layer equivalent is safe to call on every authenticated
  * request (upsert + find-or-create, no duplicate workspaces) and can be
  * replaced by a DB trigger later without changing any caller.
+ *
+ * Runs through the RLS-scoped client (not the raw `prisma` import) since
+ * this is real tenant-data creation triggered by an authenticated user's own
+ * request. The Workspace/WorkspaceMember pair is created via the
+ * app_private.bootstrap_workspace() SECURITY DEFINER function rather than
+ * Prisma's nested create: Postgres requires a newly-inserted row to satisfy
+ * its own SELECT policy before RETURNING it (which Prisma's .create()
+ * always requests), and a workspace has no member yet at the instant it's
+ * created — a chicken-and-egg case that only a privileged, narrowly-scoped
+ * function can resolve. See the bootstrap_workspace_function migration.
  */
 export async function ensureWorkspaceForUser(authUser: User) {
+  const prisma = forUser(authUser.id);
+
   const user = await prisma.user.upsert({
     where: { id: authUser.id },
     update: { email: authUser.email ?? undefined },
@@ -33,14 +47,14 @@ export async function ensureWorkspaceForUser(authUser: User) {
     return { workspaceId: existingMembership.workspace.id, workspaceName: existingMembership.workspace.name };
   }
 
-  const workspace = await prisma.workspace.create({
-    data: {
-      name: `${user.email.split("@")[0]}'s Workspace`,
-      members: {
-        create: { userId: user.id, role: "OWNER" },
-      },
-    },
-  });
+  const workspaceId = randomUUID();
+  const memberId = randomUUID();
+  const workspaceName = `${user.email.split("@")[0]}'s Workspace`;
 
-  return { workspaceId: workspace.id, workspaceName: workspace.name };
+  await executeAsUser(
+    authUser.id,
+    Prisma.sql`SELECT app_private.bootstrap_workspace(${workspaceId}::uuid, ${workspaceName}, ${memberId}::uuid, ${user.id}::uuid)`,
+  );
+
+  return { workspaceId, workspaceName };
 }

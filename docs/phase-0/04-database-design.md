@@ -109,11 +109,11 @@ Workspace 1──* AuditLog *──1 User
 
 ## 5. Row Level Security strategy
 
-RLS is enabled on every tenant-owned table as defense-in-depth underneath application-layer authorization (see [09-security-model.md](./09-security-model.md) for the full model). Shape:
+RLS is enabled on every tenant-owned table as defense-in-depth underneath application-layer authorization — implemented in the `rls_and_roles` (+ three follow-up) migrations, full mechanism documented in [09-security-model.md §2](./09-security-model.md#2-authorization). Shape:
 
-- Tenant-owned tables: policy restricts rows to `workspaceId IN (SELECT workspaceId FROM WorkspaceMember WHERE userId = auth.uid())`.
-- Global reference tables (`Company`, `PriceSnapshot`, `FinancialStatement`, `SecFiling`, `EarningsEvent`): `SELECT` allowed for any authenticated role; `INSERT`/`UPDATE`/`DELETE` restricted to the service role used by background jobs.
-- All application server code (Prisma, via the pooled connection) runs as a role that RLS still applies to for defense-in-depth — Prisma does not get a blanket bypass role in production. Background jobs that must write global reference data use a distinct, narrowly-scoped service role.
+- Tenant-owned tables: policy restricts rows to `workspaceId IN (SELECT app_private.current_user_workspace_ids())` — a `SECURITY DEFINER` helper rather than a raw self-referencing subquery on `WorkspaceMember`, to avoid the policy recursively re-applying itself to its own membership lookup. Tables one level removed from `workspaceId` (`Holding`, `Transaction`, `BrokerageConnection`, `CsvImportJob`, `ThesisRevision`, `AlertEvent`) scope via an `EXISTS` check against their parent's already-RLS-filtered row instead of repeating the membership lookup.
+- Global reference tables (`Company`, `PriceSnapshot`, `FinancialStatement`, `SecFiling`, `EarningsEvent`): open `SELECT` policy (`USING (true)`); no `INSERT`/`UPDATE`/`DELETE` grant at all for the app-facing role — writes are `service_role_app`-only (background jobs).
+- Application server code runs as `app_user` — `NOSUPERUSER`, `NOBYPASSRLS`, RLS genuinely applies to it, not just declared and bypassed by an owner-privileged connection. Background jobs that must write global reference data use `service_role_app` (`BYPASSRLS`) instead, a distinct, narrowly-scoped role — not the migration-owning `postgres` role, and not a blanket bypass available to request-serving code.
 
 ## 6. Retention & deletion
 

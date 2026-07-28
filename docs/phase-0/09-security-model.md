@@ -11,7 +11,21 @@
 Two layers, deliberately redundant:
 
 1. **Application layer (primary, and where business rules live)**: every `server/queries.ts` / `server/actions.ts` function takes the authenticated `userId`, resolves their `workspaceId` membership, and scopes every Prisma query by `workspaceId`. A query that omits the `workspaceId` filter is a code-review-blocking bug, not a style nit.
-2. **Database layer (defense-in-depth)**: Postgres Row Level Security is enabled on every tenant-owned table (see [04-database-design.md §5](./04-database-design.md#5-row-level-security-strategy)). Even if application-layer scoping has a bug, RLS is the backstop that prevents cross-workspace data leakage at the database level.
+2. **Database layer (defense-in-depth, genuinely enforced, not just declared)**: Postgres Row Level Security is enabled on every tenant-owned table (see [04-database-design.md §5](./04-database-design.md#5-row-level-security-strategy)). Even if application-layer scoping has a bug, RLS is the backstop that prevents cross-workspace data leakage at the database level.
+
+   This required more than turning RLS on, because the app connects via Prisma directly rather than through Supabase's PostgREST layer — the thing that normally makes `auth.uid()` resolve. Implemented as three distinct Postgres roles (see the `rls_and_roles` migration and `src/lib/db/`):
+
+   | Role | Attributes | Used by |
+   |---|---|---|
+   | `postgres` | owner | Prisma CLI only (`DIRECT_URL`) — migrations, never app runtime |
+   | `app_user` | `NOSUPERUSER`, `NOBYPASSRLS` | Default Prisma client (`DATABASE_URL`) — every request-scoped query, via `src/lib/db/rls.ts#forUser` |
+   | `service_role_app` | `NOSUPERUSER`, `BYPASSRLS` | `src/lib/db/prisma-service.ts` — background jobs, seed scripts; never serves a user request |
+
+   `forUser(userId)` is a Prisma Client Extension that wraps every model operation in a transaction that first sets the `request.jwt.claims` session variable Supabase's `auth.uid()` reads from — the same variable PostgREST would normally set per-request. **Caveat discovered during implementation**: Prisma extensions' `$allModels.$allOperations` hook only intercepts model operations (`.create()`, `.findMany()`, …), not the client-level `$executeRaw`/`$queryRaw` escape hatches — a raw call on a `forUser()` client silently sets no claim. `src/lib/db/rls.ts#executeAsUser` exists specifically for the one legitimate case that needs raw SQL (calling a `SECURITY DEFINER` helper function); nothing else should reach for `$executeRaw` directly.
+
+   `app_user` does **not** have schema-level `USAGE` on `auth` (Supabase's own hardening prevents granting it, even when explicitly requested) — RLS policies are compiled once by the `postgres` owner at creation time and reference `auth.uid()` by its resolved OID, so evaluating them only needs `EXECUTE` on that function, which `app_user` does have. Ad hoc raw SQL text referencing `auth.uid()` would still fail; the app never does that.
+
+   One structural chicken-and-egg case: a brand-new `Workspace` has no `WorkspaceMember` row at the instant it's created, so it can never satisfy its own `SELECT` policy in time for Prisma's `RETURNING` clause. Resolved with `app_private.bootstrap_workspace()`, a single `SECURITY DEFINER` function (owned by `postgres`, not `app_user`) that creates the `Workspace` + `WorkspaceMember` pair atomically and enforces internally that a caller can only ever bootstrap a workspace for themselves (`p_user_id` must equal `auth.uid()`) — since `SECURITY DEFINER` elevates privilege, that check has to live inside the function, not rely on the caller's RLS context. `app_user` is granted `EXECUTE` on this one function only — no `CREATE` on the `app_private` schema, no ownership of it or the tables it touches, so `app_user` cannot alter, replace, or drop it.
 
 Role model: `WorkspaceRole` (`OWNER`/`EDITOR`/`VIEWER`) exists in the schema from V1, but V1 only ever creates `OWNER` rows (single-user workspaces) — the authorization checks for `EDITOR`/`VIEWER` semantics are designed but not exercised until Phase 3 ships multi-seat workspaces. This is called out explicitly so Phase 3 isn't a security redesign, just turning on checks that were planned for.
 
@@ -43,8 +57,10 @@ Concretely:
 
 | Secret | Storage | Access |
 |---|---|---|
-| Database credentials | Vercel encrypted env vars, separate per environment | Server runtime only |
-| Supabase service role key | Vercel encrypted env vars, **never** exposed to any client bundle | Background jobs / trusted server contexts only, never in a Route Handler that also accepts user input without narrow scoping |
+| `DATABASE_URL` (`app_user`, RLS-constrained) | Vercel encrypted env vars, separate per environment | App runtime — every request-scoped query, via `forUser()` |
+| `DIRECT_URL` (`postgres`, owner) | Vercel encrypted env vars | Prisma CLI only (migrations); never imported by app runtime code |
+| `SERVICE_DATABASE_URL` (`service_role_app`, `BYPASSRLS`) | Vercel encrypted env vars | Background jobs / seed scripts only — never serves a user request |
+| Supabase service role key (Auth admin API) | Vercel encrypted env vars, **never** exposed to any client bundle | Background jobs / trusted server contexts only, never in a Route Handler that also accepts user input without narrow scoping |
 | Robinhood session credential | Supabase Vault (or equivalent), referenced by `credentialRef` | Sync job execution only, fetched just-in-time |
 | AI provider API key | Vercel encrypted env vars | `ai-summaries` job only |
 | Inngest signing key | Vercel encrypted env vars | Webhook signature verification only |
