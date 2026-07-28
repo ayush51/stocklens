@@ -322,18 +322,18 @@ enum MetricConfidence {
 }
 
 model MetricObservation {
-  id                String            @id @default(uuid()) @db.Uuid
-  templateItemId    String            @db.Uuid
-  fiscalYear        Int
-  fiscalPeriod      FiscalPeriod
+  id               String           @id @default(uuid()) @db.Uuid
+  templateItemId   String           @db.Uuid
+  fiscalYear       Int
+  fiscalPeriod     FiscalPeriod
   // Kept as a string, not Decimal: some company-specific KPIs are
   // qualitative (e.g. "data-centre capacity commentary"), not numeric.
-  value             String
-  unit              String
-  source            String? // URL or citation text
-  confidence        MetricConfidence  @default(REPORTED)
-  isManualOverride  Boolean           @default(false)
-  recordedAt        DateTime          @default(now())
+  value            String
+  unit             String
+  source           String? // URL or citation text
+  confidence       MetricConfidence @default(REPORTED)
+  isManualOverride Boolean          @default(false)
+  recordedAt       DateTime         @default(now())
 
   templateItem CompanyMetricTemplateItem @relation(fields: [templateItemId], references: [id], onDelete: Cascade)
 
@@ -392,16 +392,34 @@ enum ThesisStatus {
 }
 
 model Thesis {
-  id          String          @id @default(uuid()) @db.Uuid
-  workspaceId String          @db.Uuid
-  companyId   String          @db.Uuid
-  holdingId   String?         @unique @db.Uuid
-  summary     String
-  conviction  ConvictionLevel @default(MEDIUM)
-  targetPrice Decimal?        @db.Decimal(20, 4)
-  status      ThesisStatus    @default(ACTIVE)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id                      String          @id @default(uuid()) @db.Uuid
+  workspaceId             String          @db.Uuid
+  companyId               String          @db.Uuid
+  holdingId               String?         @unique @db.Uuid
+  title                   String          @default("")
+  summary                 String
+  // "Why the market may be mispricing the company" — the core contrarian
+  // claim, kept distinct from `summary` (which is the general thesis
+  // overview) per the spec's explicit field list.
+  whyMispriced            String?
+  expectedDrivers         String?
+  risks                   String?
+  keyAssumptions          String?
+  timeHorizon             String? // free text ("12-24 months") — horizons vary too much for a fixed enum
+  valuationNotes          String?
+  positionSizingRationale String?
+  reasonsToAdd            String?
+  reasonsToHold           String?
+  reasonsToTrim           String?
+  reasonsToExit           String?
+  invalidationConditions  String?
+  nextReviewDate          DateTime?       @db.Date
+  sources                 String[]        @default([])
+  conviction              ConvictionLevel @default(MEDIUM)
+  targetPrice             Decimal?        @db.Decimal(20, 4)
+  status                  ThesisStatus    @default(ACTIVE)
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
 
   workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   company     Company          @relation(fields: [companyId], references: [id])
@@ -419,14 +437,33 @@ enum ThesisRevisionTrigger {
   FILING_REVIEW
 }
 
+// Immutable full snapshot of a Thesis at one point in time — never updated
+// or deleted after creation. Every edit to Thesis inserts one of these
+// first, so "what changed between versions" is always answerable by diffing
+// two rows, not by reconstructing history from an audit log.
 model ThesisRevision {
-  id          String                @id @default(uuid()) @db.Uuid
-  thesisId    String                @db.Uuid
-  summary     String
-  conviction  ConvictionLevel
-  targetPrice Decimal?              @db.Decimal(20, 4)
-  trigger     ThesisRevisionTrigger @default(MANUAL_EDIT)
-  createdAt   DateTime              @default(now())
+  id                      String                @id @default(uuid()) @db.Uuid
+  thesisId                String                @db.Uuid
+  title                   String                @default("")
+  summary                 String
+  whyMispriced            String?
+  expectedDrivers         String?
+  risks                   String?
+  keyAssumptions          String?
+  timeHorizon             String?
+  valuationNotes          String?
+  positionSizingRationale String?
+  reasonsToAdd            String?
+  reasonsToHold           String?
+  reasonsToTrim           String?
+  reasonsToExit           String?
+  invalidationConditions  String?
+  nextReviewDate          DateTime?             @db.Date
+  sources                 String[]              @default([])
+  conviction              ConvictionLevel
+  targetPrice             Decimal?              @db.Decimal(20, 4)
+  trigger                 ThesisRevisionTrigger @default(MANUAL_EDIT)
+  createdAt               DateTime              @default(now())
 
   thesis         Thesis          @relation(fields: [thesisId], references: [id], onDelete: Cascade)
   earningsReview EarningsReview?
