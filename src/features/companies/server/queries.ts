@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { prisma } from "@/lib/db/prisma";
 import { prismaService } from "@/lib/db/prisma-service";
 import { AppError } from "@/lib/errors";
@@ -14,8 +16,12 @@ export { normalizeTicker };
  * Returns null (not a thrown error) when the ticker can't be resolved at
  * all — that's a normal "this ticker doesn't exist" outcome the caller
  * should render as a not-found state, not an exceptional one.
+ *
+ * Wrapped in React's cache() so the /companies/[ticker] layout and page
+ * (and any future sibling pages) resolve the same ticker once per request,
+ * not once per component that needs it.
  */
-export async function getOrResolveCompanyByTicker(rawTicker: string) {
+export const getOrResolveCompanyByTicker = cache(async (rawTicker: string) => {
   const ticker = normalizeTicker(rawTicker);
   if (!ticker) {
     throw new AppError("VALIDATION_ERROR", "A ticker is required.");
@@ -48,4 +54,4 @@ export async function getOrResolveCompanyByTicker(rawTicker: string) {
       name: resolved.name,
     },
   });
-}
+});
