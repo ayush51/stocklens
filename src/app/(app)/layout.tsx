@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/portfolios", label: "Portfolios" },
   { href: "/theses", label: "Theses" },
+  { href: "/scenarios", label: "Scenarios" },
   { href: "/journal", label: "Journal" },
   { href: "/alerts", label: "Alerts" },
   { href: "/settings/workspace", label: "Settings" },
