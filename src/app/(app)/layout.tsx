@@ -9,12 +9,14 @@ import { CompanySearchBox } from "@/features/companies/components/company-search
 import { Button } from "@/components/ui/button";
 
 // Phase 2 features land under these paths (docs/phase-0/06-routes.md); the
-// shell links to them now so the nav structure is visible, even though only
-// /dashboard is a real page today.
+// shell links to them now so the nav structure is visible, even though not
+// every item is a real page yet (Theses/Alerts remain placeholders — thesis
+// itself lives per-company under /companies/[ticker]/thesis).
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/portfolios", label: "Portfolios" },
   { href: "/theses", label: "Theses" },
+  { href: "/journal", label: "Journal" },
   { href: "/alerts", label: "Alerts" },
   { href: "/settings/workspace", label: "Settings" },
 ];

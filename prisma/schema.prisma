@@ -34,13 +34,14 @@ model Workspace {
   name      String
   createdAt DateTime @default(now())
 
-  members         WorkspaceMember[]
-  portfolios      Portfolio[]
-  theses          Thesis[]
-  earningsReviews EarningsReview[]
-  alertRules      AlertRule[]
-  aiSummaries     AISummary[]
-  auditLogs       AuditLog[]
+  members                WorkspaceMember[]
+  portfolios             Portfolio[]
+  theses                 Thesis[]
+  earningsReviews        EarningsReview[]
+  alertRules             AlertRule[]
+  aiSummaries            AISummary[]
+  auditLogs              AuditLog[]
+  decisionJournalEntries DecisionJournalEntry[]
 }
 
 enum WorkspaceRole {
@@ -100,9 +101,10 @@ model Holding {
   realizedGainLoss Decimal  @default(0) @db.Decimal(20, 4)
   updatedAt        DateTime @updatedAt
 
-  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  company   Company   @relation(fields: [companyId], references: [id])
-  thesis    Thesis?
+  portfolio              Portfolio              @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  company                Company                @relation(fields: [companyId], references: [id])
+  thesis                 Thesis?
+  decisionJournalEntries DecisionJournalEntry[]
 
   @@unique([portfolioId, companyId])
   @@index([companyId])
@@ -204,14 +206,15 @@ model Company {
   industry  String?
   updatedAt DateTime         @updatedAt
 
-  holdings            Holding[]
-  transactions        Transaction[]
-  priceSnapshots      PriceSnapshot[]
-  financialStatements FinancialStatement[]
-  secFilings          SecFiling[]
-  earningsEvents      EarningsEvent[]
-  theses              Thesis[]
-  metricTemplate      CompanyMetricTemplate?
+  holdings               Holding[]
+  transactions           Transaction[]
+  priceSnapshots         PriceSnapshot[]
+  financialStatements    FinancialStatement[]
+  secFilings             SecFiling[]
+  earningsEvents         EarningsEvent[]
+  theses                 Thesis[]
+  metricTemplate         CompanyMetricTemplate?
+  decisionJournalEntries DecisionJournalEntry[]
 }
 
 model PriceSnapshot {
@@ -504,6 +507,69 @@ model ThesisEvaluation {
 
   @@unique([criterionId, fiscalYear, fiscalPeriod])
   @@index([criterionId, fiscalYear, fiscalPeriod])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Decision journal — required record-keeping for major portfolio
+// decisions, aimed at making emotionally-driven buying/averaging-
+// down/panic-selling visible after the fact. Tenant data.
+// ─────────────────────────────────────────────────────────────
+enum DecisionAction {
+  BUY
+  ADD
+  HOLD
+  TRIM
+  EXIT
+  WATCH
+}
+
+enum DecisionEmotion {
+  CONFIDENT
+  ANXIOUS
+  FOMO
+  REGRET
+  NEUTRAL
+  EXCITED
+  FEARFUL
+}
+
+model DecisionJournalEntry {
+  id                                      String           @id @default(uuid()) @db.Uuid
+  workspaceId                             String           @db.Uuid
+  companyId                               String           @db.Uuid
+  holdingId                               String?          @db.Uuid
+  decisionDate                            DateTime         @db.Date
+  action                                  DecisionAction
+  proposedAmount                          Decimal?         @db.Decimal(20, 4)
+  evidenceSupporting                      String?
+  evidenceOpposing                        String?
+  currentEmotion                          DecisionEmotion?
+  confidence                              ConvictionLevel?
+  thesisImpact                            String?
+  positionSizeImpact                      String?
+  taxConsiderationNotes                   String?
+  whatWouldChangeDecision                 String?
+  // Pre-add behavioral checklist (spec: "before recording an add
+  // decision, ask…") — null when the action isn't BUY/ADD, since the
+  // checklist doesn't apply to a trim/exit/watch/hold entry.
+  wouldBuyIfOwnedNone                     Boolean?
+  buyingBecauseThesisImprovedNotPriceDrop Boolean?
+  belowAllocationCeiling                  Boolean?
+  portfolioAdequatelyDiversified          Boolean?
+  newEvidenceForPurchase                  String?
+  evidenceThatWouldProveWrong             String?
+  reviewDate                              DateTime?        @db.Date
+  finalAction                             String? // what was actually done — may differ from `action`, filled in later
+  outcomeNotes                            String?
+  createdAt                               DateTime         @default(now())
+  updatedAt                               DateTime         @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company   Company   @relation(fields: [companyId], references: [id])
+  holding   Holding?  @relation(fields: [holdingId], references: [id])
+
+  @@index([workspaceId, decisionDate])
+  @@index([companyId])
 }
 
 enum ThesisRevisionTrigger {
