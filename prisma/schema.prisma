@@ -144,7 +144,12 @@ model BrokerageConnection {
   portfolioId   String                    @unique @db.Uuid
   provider      String                    @default("ROBINHOOD")
   status        BrokerageConnectionStatus @default(CONNECTED)
-  credentialRef String // reference/ID into external secret store — never the credential itself
+  // Null under the MCP-assisted sync model: there is no credential for the
+  // app to reference, since the app never authenticates to the brokerage
+  // itself (see ROBINHOOD_MCP_SECURITY_PLAN.md). Reserved for a future
+  // self-service connect flow, which would populate a real secret-store
+  // reference here — never the credential itself.
+  credentialRef String?
   scopes        String[] // e.g. ["read:positions", "read:transactions"] — write scopes never issued
   lastSyncedAt  DateTime?
   createdAt     DateTime                  @default(now())
@@ -178,17 +183,23 @@ model CsvImportJob {
 }
 
 // ─────────────────────────────────────────────────────────────
+enum CompanyAssetType {
+  STOCK
+  ETF
+}
+
 // Company & market data — GLOBAL reference data (no workspaceId)
 // ─────────────────────────────────────────────────────────────
 model Company {
-  id        String   @id @default(uuid()) @db.Uuid
-  ticker    String   @unique // normalized (uppercase, trimmed) at the application layer
-  cik       String?  @unique
+  id        String           @id @default(uuid()) @db.Uuid
+  ticker    String           @unique // normalized (uppercase, trimmed) at the application layer
+  cik       String?          @unique // null for ETFs — SEC's operating-company ticker list doesn't cover funds
   name      String
+  assetType CompanyAssetType @default(STOCK)
   exchange  String?
   sector    String?
   industry  String?
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime         @updatedAt
 
   holdings            Holding[]
   transactions        Transaction[]
