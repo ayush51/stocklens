@@ -14,26 +14,44 @@ Next.js 15 App Router. Three route groups separate layout/auth concerns without 
 
 /dashboard                           (app)        authenticated — cross-portfolio summary
 
-/portfolios                          (app)        authenticated — list
-/portfolios/new                      (app)        authenticated — create (manual or CSV entry point)
+/settings/integrations/robinhood     (app)        authenticated — connect/disconnect, sync status, scopes shown read-only.
+                                                   Golden-path-critical (Phase 2) — reachable from onboarding directly,
+                                                   not buried under portfolio setup.
+
+/portfolios                          (app)        authenticated — list (a Robinhood-sourced portfolio appears here
+                                                   automatically after connecting, no manual creation needed)
+/portfolios/new                      (app)        authenticated — create (manual or CSV entry point, Phase 7 —
+                                                   an alternative path, never a prerequisite for /settings/integrations/robinhood)
 /portfolios/[portfolioId]            (app)        authenticated — holdings table, allocation, performance
-/portfolios/[portfolioId]/import     (app)        authenticated — CSV upload + column mapping + preview
-/portfolios/[portfolioId]/holdings/[holdingId]   (app) authenticated — single holding detail + linked thesis
+/portfolios/[portfolioId]/import     (app)        authenticated — CSV upload + column mapping + preview (Phase 7)
+/portfolios/[portfolioId]/holdings/[holdingId]   (app) authenticated — the golden path's "open a holding" destination.
+                                                   Position data (quantity, cost basis, P&L) plus a monitoring rollup:
+                                                   financial trends, forward expectations, valuation, company-specific
+                                                   KPIs, tracked catalysts/risks, and thesis status — composed from the
+                                                   company sub-pages below plus holding-specific context. See
+                                                   [11-implementation-plan.md Phase 6](./11-implementation-plan.md#phase-6--thesis-catalysts-risks-monitoring-rollup).
 
 /companies/[ticker]                  (app)        authenticated — overview (any valid ticker, not just held ones)
-/companies/[ticker]/financials       (app)        authenticated — FinancialStatement history + ratios
+/companies/[ticker]/financials       (app)        authenticated — FinancialStatement history (expanded core-metrics
+                                                   list, Phase 3) + valuation (current multiples, historical percentile,
+                                                   peer comparison — computed at read time, not stored)
+/companies/[ticker]/estimates        (app)        authenticated — consensus estimates, revision trend, guidance vs.
+                                                   consensus, surprise history (Phase 4; requires an estimates vendor)
+/companies/[ticker]/kpis             (app)        authenticated — company-specific KPIs from its matched
+                                                   IndustryMetricTemplate, if any (Phase 5)
 /companies/[ticker]/filings          (app)        authenticated — SecFiling list
-/companies/[ticker]/filings/[filingId]           (app) authenticated — filing detail + AI summary
+/companies/[ticker]/filings/[filingId]           (app) authenticated — filing detail + AI summary (Phase 9)
 /companies/[ticker]/earnings         (app)        authenticated — EarningsEvent history + calendar
 /companies/[ticker]/thesis           (app)        authenticated — thesis for this company (create if none)
 
 /theses                              (app)        authenticated — cross-portfolio thesis list, filter by status
-/theses/[thesisId]                   (app)        authenticated — thesis detail, revision history, earnings reviews
+                                                   (on-track/watch/broken/unreviewed)
+/theses/[thesisId]                   (app)        authenticated — thesis detail, revision history, tracked
+                                                   catalysts/risks (create/edit inline, no separate CRUD pages), earnings reviews
 
-/alerts                              (app)        authenticated — alert rules list + create
+/alerts                              (app)        authenticated — alert rules list + create (Phase 8)
 
-/settings/workspace                  (app)        authenticated — workspace name, members (Phase 3)
-/settings/integrations/robinhood     (app)        authenticated — connect/disconnect, sync status, scopes shown read-only
+/settings/workspace                  (app)        authenticated — workspace name, members (Phase 9)
 
 /api/webhooks/inngest                Route Handler — Inngest step execution endpoint
 /api/csv-import/[jobId]              Route Handler — upload target for CSV file (multipart), enqueues job
@@ -48,7 +66,7 @@ app/layout.tsx                         # root: fonts, theme provider, toaster
 ├── (auth)/layout.tsx                  # centered card layout, no nav
 └── (app)/layout.tsx                   # sidebar + topbar shell
     ├── requires authenticated session (redirect to /sign-in otherwise)
-    ├── resolves active Workspace (single workspace in V1; workspace switcher UI stubbed for Phase 3)
+    ├── resolves active Workspace (single workspace in V1; workspace switcher UI stubbed for Phase 9)
     └── children render inside the shell's <main>
 ```
 
@@ -58,7 +76,7 @@ Handled in `middleware.ts` plus a server-side guard in `(app)/layout.tsx`:
 
 - `middleware.ts` refreshes the Supabase session cookie on every request (required for SSR auth) and redirects unauthenticated requests to `/sign-in` for any path under `(app)`.
 - `(app)/layout.tsx` re-checks the session server-side (defense in depth — middleware alone is not treated as sufficient for an authenticated data page) and resolves `workspaceId`, passed down via a server-only context helper (not client-side global state).
-- `/companies/[ticker]/*` is authenticated (not public) in V1 — company research is a logged-in feature, not a public marketing surface. (Public read-only thesis pages are an explicit Phase 3 item, on a separate `/@[handle]/thesis/[slug]`-style route, opt-in per thesis.)
+- `/companies/[ticker]/*` is authenticated (not public) in V1 — company research is a logged-in feature, not a public marketing surface. (Public read-only thesis pages are an explicit Phase 9 item, on a separate `/@[handle]/thesis/[slug]`-style route, opt-in per thesis.)
 
 ## 4. Dynamic segment resolution
 

@@ -2,6 +2,8 @@
 
 Feature-based architecture: `app/` is routing-only and stays thin; each feature owns its server logic, UI, and types under `src/features/*`. Cross-cutting infrastructure lives in `src/shared` and `src/lib`.
 
+**Revision note**: three new feature directories (`market-data`, `analyst-estimates`, `company-kpis`) and three new/renamed contracts, added to support the Robinhood-first golden path — see [11-implementation-plan.md](./11-implementation-plan.md) for phasing.
+
 ```
 stocklens/
 ├── prisma/
@@ -31,7 +33,9 @@ stocklens/
 │   │   │   │   └── [ticker]/
 │   │   │   │       ├── page.tsx              # overview
 │   │   │   │       ├── filings/page.tsx
-│   │   │   │       ├── financials/page.tsx
+│   │   │   │       ├── financials/page.tsx   # expanded core-metrics + valuation (Phase 3)
+│   │   │   │       ├── estimates/page.tsx    # forward-looking data (Phase 4)
+│   │   │   │       ├── kpis/page.tsx         # company-specific KPIs (Phase 5)
 │   │   │   │       ├── earnings/page.tsx
 │   │   │   │       └── thesis/page.tsx
 │   │   │   ├── theses/
@@ -50,55 +54,75 @@ stocklens/
 │   │
 │   ├── features/                     # one directory per domain capability
 │   │   ├── portfolios/
-│   │   │   ├── components/           # PortfolioCard, HoldingsTable, AllocationChart…
+│   │   │   ├── components/           # PortfolioCard, HoldingsTable, AllocationChart, HoldingMonitoringSummary…
 │   │   │   ├── server/                # actions.ts (Server Actions), queries.ts, service.ts
 │   │   │   ├── hooks/
 │   │   │   ├── types.ts
 │   │   │   └── validation.ts          # zod schemas for this feature's inputs
-│   │   ├── csv-import/
+│   │   ├── csv-import/                 # Phase 7 — alternative ingestion, never a Robinhood prerequisite
 │   │   │   ├── components/            # UploadDropzone, ColumnMapper, ImportPreviewTable
 │   │   │   ├── server/                 # parse.ts, reconcile.ts, job-handler.ts (Inngest fn)
 │   │   │   └── types.ts
-│   │   ├── brokerage-sync/
-│   │   │   ├── providers/              # robinhood/ adapter implementing BrokerageSyncProvider
-│   │   │   ├── server/
+│   │   ├── brokerage-sync/             # Phase 2, MVP-critical
+│   │   │   ├── providers/              # robinhood/ adapter implementing BrokerageSyncProvider — read-only
+│   │   │   │                          # methods only; see docs/phase-0/09-security-model.md §3
+│   │   │   ├── server/                 # sync job, kill-switch check, audit logging
 │   │   │   └── components/             # ConnectRobinhoodCard, SyncStatusBadge
 │   │   ├── companies/
 │   │   │   ├── components/             # CompanyHeader, MetricsGrid
 │   │   │   ├── server/
 │   │   │   └── types.ts
 │   │   ├── filings/
-│   │   │   ├── providers/              # sec-edgar/ adapter implementing FilingsProvider
+│   │   │   ├── providers/              # sec-edgar/ adapter implementing FilingProvider (renamed from
+│   │   │   │                          # FilingsProvider when Phase 3 implementation starts)
 │   │   │   ├── components/             # FilingsList, FilingViewer
 │   │   │   └── server/
-│   │   ├── financial-metrics/
-│   │   │   ├── providers/              # edgar-xbrl/, (future) paid-vendor/
-│   │   │   ├── components/             # MetricsTable, RatioTrendChart
+│   │   ├── financial-metrics/          # Phase 3 — expanded core-metrics list + valuation
+│   │   │   ├── providers/              # edgar-xbrl/ adapter implementing FundamentalDataProvider
+│   │   │   │                          # (renamed from MetricsProvider when Phase 3 implementation starts)
+│   │   │   ├── components/             # MetricsTable, RatioTrendChart, ValuationCard
+│   │   │   └── server/                 # includes growth/margin trajectory + valuation calculators (pure fns)
+│   │   ├── market-data/                # Phase 3, new — vendor TBD, see docs/phase-0/02-architecture.md §6
+│   │   │   ├── providers/              # implements MarketDataProvider
+│   │   │   ├── components/
 │   │   │   └── server/
-│   │   ├── thesis/
-│   │   │   ├── components/             # ThesisEditor, ThesisRevisionHistory, ConvictionBadge
+│   │   ├── analyst-estimates/          # Phase 4, new — vendor TBD
+│   │   │   ├── providers/              # implements AnalystEstimateProvider
+│   │   │   ├── components/             # EstimatesTrendChart, GuidanceCard
+│   │   │   └── server/                 # includes revision-direction calculator (pure fn over AnalystEstimate rows)
+│   │   ├── company-kpis/               # Phase 5, new
+│   │   │   ├── providers/              # implements CompanyKPIProvider (composite: data-provider/manual first,
+│   │   │   │                          # filing-derived as a stretch goal)
+│   │   │   ├── components/             # KPIGrid
+│   │   │   └── server/                 # industry-template matching, override resolution
+│   │   ├── thesis/                     # Phase 6 — also owns Catalyst/Risk (tenant-owned, linked to Thesis)
+│   │   │   ├── components/             # ThesisEditor, ThesisRevisionHistory, ConvictionBadge, CatalystList, RiskList
 │   │   │   ├── server/
 │   │   │   └── types.ts
-│   │   ├── earnings/
+│   │   ├── earnings/                   # Phase 8 — EarningsReview notes; EarningsEvent dates/estimates
+│   │   │   │                          # themselves are read via analyst-estimates/financial-metrics (Phase 4)
 │   │   │   ├── components/             # EarningsCalendar, EarningsReviewForm
 │   │   │   └── server/
-│   │   ├── alerts/
+│   │   ├── alerts/                     # Phase 8
 │   │   │   ├── components/             # AlertRuleForm, AlertList
 │   │   │   └── server/                 # evaluators/ (one per AlertType)
-│   │   ├── ai-summaries/
+│   │   ├── ai-summaries/               # Phase 9
 │   │   │   ├── providers/              # claude/ adapter implementing AISummaryProvider
 │   │   │   ├── components/             # SummaryCard, RegenerateButton
 │   │   │   └── server/
-│   │   └── analytics/
+│   │   └── analytics/                  # Phase 8
 │   │       ├── components/             # PerformanceChart, AllocationBreakdown
 │   │       └── server/                  # calculators (pure functions, unit-testable)
 │   │
 │   ├── shared/
 │   │   ├── contracts/                 # provider interfaces (dependency inversion boundary)
-│   │   │   ├── filings-provider.ts
-│   │   │   ├── metrics-provider.ts
-│   │   │   ├── brokerage-sync-provider.ts
-│   │   │   └── ai-summary-provider.ts
+│   │   │   ├── filing-provider.ts            # renamed from filings-provider.ts, Phase 3
+│   │   │   ├── fundamental-data-provider.ts  # renamed from metrics-provider.ts, Phase 3 (broadened)
+│   │   │   ├── market-data-provider.ts       # new, Phase 3
+│   │   │   ├── analyst-estimate-provider.ts  # new, Phase 4
+│   │   │   ├── company-kpi-provider.ts       # new, Phase 5
+│   │   │   ├── brokerage-sync-provider.ts    # unchanged — no write methods, Phase 2
+│   │   │   └── ai-summary-provider.ts        # Phase 9
 │   │   ├── components/                 # cross-feature composed components (not raw ui/)
 │   │   │   ├── page-header.tsx
 │   │   │   ├── empty-state.tsx

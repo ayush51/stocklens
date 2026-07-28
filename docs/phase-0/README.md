@@ -1,6 +1,6 @@
 # StockLens — Phase 0
 
-Phase 0 is design-only: no application code, no `package.json`, no `prisma/schema.prisma` committed to the project yet. Everything below is a decision record. Once this is reviewed and approved, Phase 1 (project scaffolding) begins per [11-implementation-plan.md](./11-implementation-plan.md).
+Phase 0 is the design record for the product. **Status: Phase 1 (foundation) and the first slice of Phase 2 (`companies` — ticker resolution) are built and deployed.** This package was revised to move read-only Robinhood sync and forward-looking company monitoring into the MVP (Phases 2-6), ahead of manual/CSV portfolio entry (Phase 7) — see [11-implementation-plan.md](./11-implementation-plan.md) for the current phase order and a requirement-by-requirement mapping from the original plan.
 
 ## Contents
 
@@ -18,7 +18,8 @@ Phase 0 is design-only: no application code, no `package.json`, no `prisma/schem
 
 ## Ground rules baked into every doc below
 
-- **Company-agnostic**: no ticker, sector, or data provider is hardcoded into the domain model. Every entity keys off a canonical `Company` resolved by ticker/CIK.
-- **SaaS-ready from day one**: a lightweight `Workspace` tenancy boundary exists in the schema even though v1 ships single-user-per-workspace, so multi-seat teams don't require a data migration later.
-- **Read-only brokerage access**: the Robinhood integration inherits the standing rule from `ROBINHOOD_MCP_SECURITY_PLAN.md` — no order placement, no account mutation, ever. This is enforced at the code layer, not just by convention. See [09-security-model.md](./09-security-model.md#robinhood-integration-boundary).
-- **Provider-swappable integrations**: SEC EDGAR, financial-metrics, and AI-summary providers sit behind interfaces (dependency inversion) so a vendor can be swapped without touching feature code.
+- **Company-agnostic**: no ticker, sector, or data provider is hardcoded into the domain model. Every entity keys off a canonical `Company` resolved by ticker/CIK. Company-specific KPI overrides are data rows (`CompanyMetricDefinition`), never a ticker conditional in code.
+- **SaaS-ready from day one**: a lightweight `Workspace` tenancy boundary exists in the schema even though v1 ships single-user-per-workspace, so multi-seat teams (Phase 9) don't require a data migration later.
+- **Read-only brokerage access, and it's MVP-critical**: the Robinhood integration inherits the standing rule from `ROBINHOOD_MCP_SECURITY_PLAN.md` — no order placement, no transfer, no account mutation of any kind, ever. This is enforced at the code layer (the interface has no such methods, verified by tests), not just by convention. See [09-security-model.md §3](./09-security-model.md#3-robinhood-integration-boundary).
+- **Provider-swappable integrations**: `FilingProvider`, `FundamentalDataProvider`, `MarketDataProvider`, `AnalystEstimateProvider`, `CompanyKPIProvider`, `BrokerageSyncProvider`, and `AISummaryProvider` all sit behind interfaces (dependency inversion) so a vendor can be swapped without touching feature code. Two of these (`MarketDataProvider`, `AnalystEstimateProvider`) currently have no chosen vendor — see [02-architecture.md §6](./02-architecture.md#6-key-architectural-risks) — this is a real open dependency, not a hypothetical one.
+- **Provenance travels with every externally-sourced number.** Source, source URL/filing accession where applicable, reporting period, observed timestamp, currency, and (for derived fields) calculation method — never presented without knowing where it came from or how fresh it is.

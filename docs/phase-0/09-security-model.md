@@ -27,31 +27,50 @@ Two layers, deliberately redundant:
 
    One structural chicken-and-egg case: a brand-new `Workspace` has no `WorkspaceMember` row at the instant it's created, so it can never satisfy its own `SELECT` policy in time for Prisma's `RETURNING` clause. Resolved with `app_private.bootstrap_workspace()`, a single `SECURITY DEFINER` function (owned by `postgres`, not `app_user`) that creates the `Workspace` + `WorkspaceMember` pair atomically and enforces internally that a caller can only ever bootstrap a workspace for themselves (`p_user_id` must equal `auth.uid()`) — since `SECURITY DEFINER` elevates privilege, that check has to live inside the function, not rely on the caller's RLS context. `app_user` is granted `EXECUTE` on this one function only — no `CREATE` on the `app_private` schema, no ownership of it or the tables it touches, so `app_user` cannot alter, replace, or drop it.
 
-Role model: `WorkspaceRole` (`OWNER`/`EDITOR`/`VIEWER`) exists in the schema from V1, but V1 only ever creates `OWNER` rows (single-user workspaces) — the authorization checks for `EDITOR`/`VIEWER` semantics are designed but not exercised until Phase 3 ships multi-seat workspaces. This is called out explicitly so Phase 3 isn't a security redesign, just turning on checks that were planned for.
+Role model: `WorkspaceRole` (`OWNER`/`EDITOR`/`VIEWER`) exists in the schema from V1, but V1 only ever creates `OWNER` rows (single-user workspaces) — the authorization checks for `EDITOR`/`VIEWER` semantics are designed but not exercised until Phase 9 ships multi-seat workspaces. This is called out explicitly so Phase 9 isn't a security redesign, just turning on checks that were planned for.
 
 ## 3. Robinhood integration boundary
 
-This inherits and extends the standing rule established in `ROBINHOOD_MCP_SECURITY_PLAN.md` at the repo root: **read-only, permanently, enforced in code, not just by prompt/agent convention.**
+**This is now MVP-critical (Phase 2), not a later-phase addition** — see [11-implementation-plan.md Phase 2](./11-implementation-plan.md#phase-2--robinhood-connect--read-only-sync-mvp-critical). It inherits and extends the standing rule established in `ROBINHOOD_MCP_SECURITY_PLAN.md` at the repo root: **read-only, permanently, enforced in code, not just by prompt/agent convention.** Every item below is a Phase 2 acceptance criterion, not optional hardening layered on afterward.
 
-Concretely:
+### 3.1 Read-only capability allowlist
 
-- `shared/contracts/brokerage-sync-provider.ts` defines the interface every broker adapter implements. **The interface itself has no `placeOrder`, `cancelOrder`, or `exercise` method — those verbs do not exist in the type.** A future engineer (or an AI coding agent working in this repo) cannot "accidentally" wire up a write call, because there is nothing to call; adding one would require a deliberate interface change, which is the point at which this design decision would have to be explicitly revisited and re-approved.
+- `shared/contracts/brokerage-sync-provider.ts` defines the interface every broker adapter implements. **The interface itself has no `placeOrder`, `cancelOrder`, `exercise`, `transfer`, or account-modification method of any kind — those verbs do not exist in the type.** A future engineer (or an AI coding agent working in this repo) cannot "accidentally" wire up a write call, because there is nothing to call; adding one would require a deliberate interface change, which is the point at which this design decision would have to be explicitly revisited and re-approved.
 
   ```ts
   interface BrokerageSyncProvider {
     getAccountSummary(connection: BrokerageConnectionRef): Promise<AccountSummary>;
     listPositions(connection: BrokerageConnectionRef): Promise<PositionSnapshot[]>;
     listTransactions(connection: BrokerageConnectionRef, since?: Date): Promise<TransactionRecord[]>;
-    // Intentionally no write methods. See docs/phase-0/09-security-model.md and
+    // Intentionally no write methods — no orders, no transfers, no account
+    // modification. See docs/phase-0/09-security-model.md and
     // ROBINHOOD_MCP_SECURITY_PLAN.md before ever adding one.
   }
   ```
 
+- The concrete Robinhood adapter (`features/brokerage-sync/providers/robinhood/`) implements exactly these three methods and nothing else. If the underlying client library it wraps exposes write-capable methods (placing orders, transfers, account settings), the adapter never imports or re-exports them — the allowlist is enforced at both the interface boundary and by what the adapter module itself chooses to expose, not just trusted by convention.
+- **Tests, not just types**: a test asserts the interface's method set directly (fails if a write method is ever added) and a second test exercises the Robinhood adapter against a mocked client, asserting it never calls anything beyond the three read endpoints even when the mock client offers more. This is what "tests proving application code cannot invoke write-capable operations" means concretely for this codebase — see the terminology note in [11-implementation-plan.md Phase 2](./11-implementation-plan.md#phase-2--robinhood-connect--read-only-sync-mvp-critical): the deployed app has no MCP connection at all, so this is about the app's own adapter, not an MCP-tool-invocation test.
+
+### 3.2 Credential handling
+
 - **Credentials are never stored in our database.** `BrokerageConnection.credentialRef` is an opaque reference into a dedicated secret store (Supabase Vault or equivalent KMS-backed store), not a token/password column. The app process fetches the live credential only at sync-job execution time, uses it, and does not persist it in application logs, error reports, or the job payload.
 - **Scopes are requested and stored explicitly** (`BrokerageConnection.scopes`, e.g. `["read:positions", "read:transactions"]`) so a connection's declared permissions are visible in the data model and auditable — a connection should never silently have broader access than the UI told the user it would.
+
+### 3.3 Sync behavior
+
 - **The sync job runs in an isolated Inngest function** (`features/brokerage-sync/server/*`) that only ever calls `BrokerageSyncProvider` read methods, writes results as `Transaction`/`Holding` rows, and never receives or forwards any user instruction that could be interpreted as a trading command — there is no code path from "user typed something" to "brokerage adapter call" at all; sync is a scheduled/triggered pull, not a conversational action.
+- **Source-ID deduplication**: `Transaction.externalId` uniqueness (`@@unique([portfolioId, externalId])`) means a position or trade the broker reports twice across syncs never double-books.
+- **Idempotent sync**: re-running a sync for the same connection — whether triggered manually, on a schedule, or retried after a transient failure — always produces the same end state. Upserts by `externalId`, never a destructive "delete all then reinsert" pattern that could lose data mid-failure.
+- **Global kill switch**: `BROKERAGE_SYNC_ENABLED` (env var, defaults `true`). Checked at the top of every sync entry point — the manual "sync now" action and the scheduled job alike — before any credential is fetched or any call to the adapter is made. Flipping it to `false` in Vercel stops all Robinhood sync activity across every workspace immediately, no deploy or DB migration required. A blocked sync attempt writes an `AuditLog` row (`BROKERAGE_SYNC_BLOCKED_BY_KILL_SWITCH`) rather than failing silently.
+
+### 3.4 Audit & lifecycle
+
+- **Sync audit log**: every sync run — not just connect/disconnect — writes an `AuditLog` row: start time, rows synced, success/failure. Connect, disconnect, and kill-switch-blocked attempts are logged the same way. See [§7](#7-audit-logging).
 - **Disconnecting is always available and destructive-safe**: revoking a `BrokerageConnection` deletes the credential reference from the secret store and marks the connection `DISCONNECTED`; it never deletes the historical `Transaction`/`Holding` data it already synced (that's the user's data, independent of the live connection).
-- Any future second broker integration must satisfy the same constraint before it's added: implements the same read-only interface, no exceptions per-broker.
+
+### 3.5 Future brokers
+
+Any future second broker integration must satisfy every requirement above before it's added: same read-only interface, same allowlist tests, same kill switch, same audit logging — no exceptions per-broker.
 
 ## 4. Secrets management
 
@@ -62,6 +81,9 @@ Concretely:
 | `SERVICE_DATABASE_URL` (`service_role_app`, `BYPASSRLS`) | Vercel encrypted env vars | Background jobs / seed scripts only — never serves a user request |
 | Supabase service role key (Auth admin API) | Vercel encrypted env vars, **never** exposed to any client bundle | Background jobs / trusted server contexts only, never in a Route Handler that also accepts user input without narrow scoping |
 | Robinhood session credential | Supabase Vault (or equivalent), referenced by `credentialRef` | Sync job execution only, fetched just-in-time |
+| `BROKERAGE_SYNC_ENABLED` (kill switch) | Vercel env var, not a secret but access-controlled the same way (only project admins can flip it) | Checked by every sync entry point, see §3.3 |
+| Market data vendor API key *(vendor TBD, Phase 3)* | Vercel encrypted env vars | `market-data` ingestion job only |
+| Analyst estimates vendor API key *(vendor TBD, Phase 4)* | Vercel encrypted env vars | `analyst-estimates` ingestion job only |
 | AI provider API key | Vercel encrypted env vars | `ai-summaries` job only |
 | Inngest signing key | Vercel encrypted env vars | Webhook signature verification only |
 
@@ -76,16 +98,16 @@ Concretely:
 
 ## 6. Rate limiting & abuse prevention
 
-See [07-api-design.md §5](./07-api-design.md#5-rate-limiting). Additionally: SEC EDGAR requires a compliant `User-Agent` and respects its own rate limits — the `filings`/`financial-metrics` providers implement backoff and a shared request budget so one workspace's activity can't exhaust the quota for everyone (a noisy-neighbor concern, not just an external-API courtesy).
+See [07-api-design.md §5](./07-api-design.md#5-rate-limiting). Additionally: SEC EDGAR requires a compliant `User-Agent` and respects its own rate limits — the `FilingProvider`/`FundamentalDataProvider` implementations implement backoff and a shared request budget so one workspace's activity can't exhaust the quota for everyone (a noisy-neighbor concern, not just an external-API courtesy). The same discipline applies to the Phase 3/4 `MarketDataProvider`/`AnalystEstimateProvider` vendors once chosen — paid vendors typically meter by request volume, so a shared budget is a cost control here, not just a courtesy.
 
 ## 7. Audit logging
 
-`AuditLog` (see [04-database-design.md §2.7](./04-database-design.md#27-cross-cutting)) records security-relevant actions with actor, action, and metadata: brokerage connect/disconnect, workspace membership changes (Phase 3), thesis deletion. It is append-only and not user-editable. This is scoped intentionally — it is not a general activity feed, to avoid it becoming noisy/ignored.
+`AuditLog` (see [04-database-design.md §2.8](./04-database-design.md#28-cross-cutting)) records security-relevant actions with actor, action, and metadata: brokerage connect/disconnect, **every Robinhood sync run** (start, row counts, success/failure — not just connect/disconnect, see §3.4), kill-switch-blocked sync attempts, workspace membership changes (Phase 9), thesis deletion. It is append-only and not user-editable. This is scoped intentionally — it is not a general activity feed, to avoid it becoming noisy/ignored.
 
 ## 8. Data privacy
 
 - Portfolio/holding/transaction data is financial PII by nature — scoped strictly by `workspaceId` per the authorization model above; never aggregated or exposed cross-workspace (no "see what other users hold" feature, ever, without a fundamentally different opt-in product decision).
-- AI summary generation sends filing/earnings text (public SEC/market data) to the AI provider — never sends a user's portfolio composition, thesis text, or personal data as part of a filing-summary prompt. A thesis-drift-detection prompt (Phase 3) that does need thesis text is scoped to that specific request only, not logged/retained by the provider beyond what the provider's own data-use terms allow (verified at Phase 3 implementation time, not assumed now).
+- AI summary generation sends filing/earnings text (public SEC/market data) to the AI provider — never sends a user's portfolio composition, thesis text, or personal data as part of a filing-summary prompt. A thesis-drift-detection prompt (Phase 9) that does need thesis text is scoped to that specific request only, not logged/retained by the provider beyond what the provider's own data-use terms allow (verified at Phase 9 implementation time, not assumed now).
 
 ## 9. Threat model summary
 
@@ -93,8 +115,10 @@ See [07-api-design.md §5](./07-api-design.md#5-rate-limiting). Additionally: SE
 |---|---|
 | Cross-tenant data leakage | `workspaceId` scoping at app layer + Postgres RLS as backstop |
 | Robinhood credential compromise | Never stored in our DB; opaque reference into a secret store; read-only scopes only |
-| Accidental write-capable brokerage call | No write method exists in the `BrokerageSyncProvider` interface — structurally impossible, not just policy |
+| Accidental write-capable brokerage call (order, cancel, exercise, transfer, account modification) | No such method exists in the `BrokerageSyncProvider` interface or the Robinhood adapter's exposed surface — structurally impossible, not just policy; verified by tests, not just types |
+| Runaway or unexpected sync activity (e.g. a bug causing excessive sync frequency, or a decision to pause the integration entirely) | Global `BROKERAGE_SYNC_ENABLED` kill switch, checked before every sync attempt, no deploy required to flip |
+| Undetected/unauditable sync activity | Every sync run (not just connect/disconnect) writes an `AuditLog` row with row counts and outcome |
 | CSV upload abuse (large/malicious files) | Size/row caps, sandboxed background parsing, typed validation with rejection over coercion |
 | Prompt injection via filing/earnings text into AI summaries | Untrusted content treated as delimited data in prompts, never as instructions |
 | Credential/secret leakage via logs or client bundle | Service-role and provider keys server-only; error reporting scrubs known secret env var names |
-| Abuse of external API quotas (SEC EDGAR) shared across tenants | Shared backoff/budget in the provider adapter, not per-request-unlimited |
+| Abuse of external API quotas (SEC EDGAR, and paid market-data/estimates vendors once chosen) shared across tenants | Shared backoff/budget in the provider adapter, not per-request-unlimited — doubles as cost control for metered paid vendors |
