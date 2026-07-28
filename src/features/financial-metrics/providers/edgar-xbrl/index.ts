@@ -144,7 +144,10 @@ export const edgarXbrlMetricsProvider: MetricsProvider = {
 
     statements.sort((a, b) => {
       if (a.fiscalYear !== b.fiscalYear) return b.fiscalYear - a.fiscalYear;
-      return periodOrder[b.fiscalPeriod as keyof typeof periodOrder] - periodOrder[a.fiscalPeriod as keyof typeof periodOrder];
+      return (
+        periodOrder[b.fiscalPeriod as keyof typeof periodOrder] -
+        periodOrder[a.fiscalPeriod as keyof typeof periodOrder]
+      );
     });
 
     return opts?.limit ? statements.slice(0, opts.limit) : statements;

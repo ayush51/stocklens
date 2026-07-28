@@ -7,9 +7,8 @@ export default function HomePage() {
         Track the thesis behind every position.
       </h1>
       <p className="text-muted-foreground mt-4 text-lg text-balance">
-        StockLens connects your portfolio to the research behind it — filings, earnings, and
-        the reasoning you wrote down before the market moved. Works with any publicly traded
-        company.
+        StockLens connects your portfolio to the research behind it — filings, earnings, and the reasoning you
+        wrote down before the market moved. Works with any publicly traded company.
       </p>
       <div className="mt-8 flex items-center justify-center gap-3">
         <Link

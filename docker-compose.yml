@@ -1,0 +1,25 @@
+services:
+  # Local Postgres for development without touching the shared hosted
+  # Supabase dev project. Not a substitute for Supabase in CI/production —
+  # this has no auth schema, so RLS policies referencing auth.uid() won't
+  # resolve against it. Point DATABASE_URL/DIRECT_URL here only for work
+  # that doesn't depend on Supabase Auth (e.g. iterating on non-RLS models).
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: stocklens
+      POSTGRES_PASSWORD: stocklens
+      POSTGRES_DB: stocklens
+    ports:
+      - "5433:5432"
+    volumes:
+      - stocklens_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stocklens"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  stocklens_postgres_data:

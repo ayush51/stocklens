@@ -24,7 +24,10 @@ export default async function CompanyOverviewPage({ params }: { params: Promise<
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Latest financials</h2>
           {statements.length > 0 ? (
-            <Link href={`/companies/${ticker}/financials`} className="text-primary text-sm font-medium hover:underline">
+            <Link
+              href={`/companies/${ticker}/financials`}
+              className="text-primary text-sm font-medium hover:underline"
+            >
               View all
             </Link>
           ) : null}
@@ -43,7 +46,10 @@ export default async function CompanyOverviewPage({ params }: { params: Promise<
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Recent filings</h2>
           {filings.length > 0 ? (
-            <Link href={`/companies/${ticker}/filings`} className="text-primary text-sm font-medium hover:underline">
+            <Link
+              href={`/companies/${ticker}/filings`}
+              className="text-primary text-sm font-medium hover:underline"
+            >
               View all
             </Link>
           ) : null}
@@ -51,7 +57,10 @@ export default async function CompanyOverviewPage({ params }: { params: Promise<
         {filings.length > 0 ? (
           <FilingsList filings={filings.slice(0, 3)} />
         ) : (
-          <EmptyState title="No filings found" description="SEC EDGAR has no filings on file for this company yet." />
+          <EmptyState
+            title="No filings found"
+            description="SEC EDGAR has no filings on file for this company yet."
+          />
         )}
       </section>
     </div>

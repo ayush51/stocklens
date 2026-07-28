@@ -1,0 +1,15 @@
+.next
+node_modules
+coverage
+playwright-report
+test-results
+src/generated
+prisma/migrations
+package-lock.json
+
+# Vendored/tool-managed — not application source, never reformat.
+.agents
+
+# Narrative docs — left in their original hand-authored formatting.
+docs
+*.md

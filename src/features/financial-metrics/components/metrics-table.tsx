@@ -48,7 +48,9 @@ export function MetricsTable({ statements }: { statements: StatementRow[] }) {
         {statements.map((statement) => (
           <TableRow key={`${statement.fiscalYear}-${statement.fiscalPeriod}`}>
             <TableCell className="font-medium">
-              {statement.fiscalPeriod === "FY" ? `FY${statement.fiscalYear}` : `${statement.fiscalPeriod} ${statement.fiscalYear}`}
+              {statement.fiscalPeriod === "FY"
+                ? `FY${statement.fiscalYear}`
+                : `${statement.fiscalPeriod} ${statement.fiscalYear}`}
             </TableCell>
             <TableCell>{formatCurrency(statement.revenue)}</TableCell>
             <TableCell>{formatCurrency(statement.netIncome)}</TableCell>

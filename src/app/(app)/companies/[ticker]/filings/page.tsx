@@ -12,7 +12,12 @@ export default async function CompanyFilingsPage({ params }: { params: Promise<{
   const filings = await getFilingsForCompany(company.id, company.cik);
 
   if (filings.length === 0) {
-    return <EmptyState title="No filings found" description="SEC EDGAR has no filings on file for this company yet." />;
+    return (
+      <EmptyState
+        title="No filings found"
+        description="SEC EDGAR has no filings on file for this company yet."
+      />
+    );
   }
 
   return <FilingsList filings={filings} />;

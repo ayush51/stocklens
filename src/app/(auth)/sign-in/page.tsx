@@ -28,13 +28,7 @@ export default function SignInPage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-            />
+            <Input id="password" name="password" type="password" autoComplete="current-password" required />
           </div>
           {state.error ? <p className="text-destructive text-sm">{state.error}</p> : null}
           <Button type="submit" className="w-full" disabled={isPending}>

@@ -14,6 +14,9 @@ export interface FilingSummary {
 }
 
 export interface FilingsProvider {
-  listFilingsForCompany(cik: string, opts?: { formTypes?: string[]; limit?: number }): Promise<FilingSummary[]>;
+  listFilingsForCompany(
+    cik: string,
+    opts?: { formTypes?: string[]; limit?: number },
+  ): Promise<FilingSummary[]>;
   getFilingDocumentText(documentUrl: string): Promise<string>;
 }

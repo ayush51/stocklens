@@ -41,8 +41,5 @@ export interface TransactionRecord {
 export interface BrokerageSyncProvider {
   getAccountSummary(connection: BrokerageConnectionRef): Promise<AccountSummary>;
   listPositions(connection: BrokerageConnectionRef): Promise<PositionSnapshot[]>;
-  listTransactions(
-    connection: BrokerageConnectionRef,
-    since?: Date,
-  ): Promise<TransactionRecord[]>;
+  listTransactions(connection: BrokerageConnectionRef, since?: Date): Promise<TransactionRecord[]>;
 }

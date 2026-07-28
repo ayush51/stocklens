@@ -28,7 +28,10 @@ async function currentOrigin() {
   return headersList.get("origin") ?? `https://${headersList.get("host")}`;
 }
 
-export async function signInWithPassword(_prevState: AuthActionState, formData: FormData): Promise<AuthActionState> {
+export async function signInWithPassword(
+  _prevState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
 
@@ -42,7 +45,10 @@ export async function signInWithPassword(_prevState: AuthActionState, formData: 
   redirect("/dashboard");
 }
 
-export async function signUpWithPassword(_prevState: AuthActionState, formData: FormData): Promise<AuthActionState> {
+export async function signUpWithPassword(
+  _prevState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
 
