@@ -144,26 +144,12 @@ model BrokerageConnection {
   portfolioId   String                    @unique @db.Uuid
   provider      String                    @default("ROBINHOOD")
   status        BrokerageConnectionStatus @default(CONNECTED)
-  credentialRef String // EncryptedSecret.id — never the credential itself
+  credentialRef String // reference/ID into external secret store — never the credential itself
   scopes        String[] // e.g. ["read:positions", "read:transactions"] — write scopes never issued
   lastSyncedAt  DateTime?
   createdAt     DateTime                  @default(now())
 
   portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-}
-
-// Envelope-encrypted secret storage: AES-256-GCM ciphertext, decryptable only
-// by code holding CREDENTIAL_ENCRYPTION_KEY (server-only env var). Not
-// modeled as a "credentials" table with plaintext columns — the ciphertext
-// itself is meaningless without the key, which never touches Postgres.
-// app_user has NO grant on this table at all (not even SELECT) — only
-// service_role_app can read/write it. See docs/phase-0/09-security-model.md §3.2.
-model EncryptedSecret {
-  id         String   @id @default(uuid()) @db.Uuid
-  ciphertext Bytes
-  iv         Bytes
-  authTag    Bytes
-  createdAt  DateTime @default(now())
 }
 
 enum CsvImportStatus {
