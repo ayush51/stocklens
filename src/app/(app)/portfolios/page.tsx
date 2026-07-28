@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getPortfoliosForUser } from "@/features/portfolios/server/queries";
 import { HoldingsTable } from "@/features/portfolios/components/holdings-table";
+import { PortfolioSummaryCard } from "@/features/portfolios/components/portfolio-summary";
 import { PageHeader } from "@/shared/components/page-header";
 import { EmptyState } from "@/shared/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +42,8 @@ export default async function PortfoliosPage() {
                 </p>
               ) : null}
             </div>
+
+            <PortfolioSummaryCard portfolio={portfolio} />
 
             {portfolio.stocks.length > 0 ? (
               <Card>

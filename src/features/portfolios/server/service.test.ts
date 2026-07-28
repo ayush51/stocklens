@@ -24,6 +24,42 @@ describe("computeHoldingAggregate", () => {
     expect(result.averageCost.toString()).toBe("100");
   });
 
+  it("computes realized gain on a profitable sell", () => {
+    const result = computeHoldingAggregate([
+      { type: "BUY", quantity: "10", price: "100" },
+      { type: "SELL", quantity: "4", price: "150" }, // (150-100)*4 = 200 gain
+    ]);
+
+    expect(result.realizedGainLoss.toString()).toBe("200");
+  });
+
+  it("computes realized loss on an unprofitable sell", () => {
+    const result = computeHoldingAggregate([
+      { type: "BUY", quantity: "10", price: "100" },
+      { type: "SELL", quantity: "4", price: "80" }, // (80-100)*4 = -80 loss
+    ]);
+
+    expect(result.realizedGainLoss.toString()).toBe("-80");
+  });
+
+  it("accumulates realized gain/loss across multiple sells, including a full round trip", () => {
+    const result = computeHoldingAggregate([
+      { type: "BUY", quantity: "10", price: "100" },
+      { type: "SELL", quantity: "10", price: "150" }, // +500, fully closed
+      { type: "BUY", quantity: "5", price: "200" },
+      { type: "SELL", quantity: "5", price: "180" }, // -100
+    ]);
+
+    expect(result.quantity.toString()).toBe("0");
+    expect(result.realizedGainLoss.toString()).toBe("400");
+  });
+
+  it("has zero realized gain/loss with no sells", () => {
+    const result = computeHoldingAggregate([{ type: "BUY", quantity: "10", price: "100" }]);
+
+    expect(result.realizedGainLoss.toString()).toBe("0");
+  });
+
   it("returns zero quantity and zero average cost when fully sold", () => {
     const result = computeHoldingAggregate([
       { type: "BUY", quantity: "5", price: "50" },

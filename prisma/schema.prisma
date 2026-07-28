@@ -90,12 +90,15 @@ model Portfolio {
 }
 
 model Holding {
-  id          String   @id @default(uuid()) @db.Uuid
-  portfolioId String   @db.Uuid
-  companyId   String   @db.Uuid
-  quantity    Decimal  @db.Decimal(20, 6)
-  averageCost Decimal  @db.Decimal(20, 4)
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default(uuid()) @db.Uuid
+  portfolioId      String   @db.Uuid
+  companyId        String   @db.Uuid
+  quantity         Decimal  @db.Decimal(20, 6)
+  averageCost      Decimal  @db.Decimal(20, 4)
+  // Cumulative realized P&L across the full transaction history — see
+  // computeHoldingAggregate. Not tax-authoritative; see disclaimers.
+  realizedGainLoss Decimal  @default(0) @db.Decimal(20, 4)
+  updatedAt        DateTime @updatedAt
 
   portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   company   Company   @relation(fields: [companyId], references: [id])

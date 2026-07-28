@@ -1,0 +1,71 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import type { PortfolioSummary } from "@/features/portfolios/server/queries";
+import { formatMoney, formatPercent, gainLossClassName } from "@/features/portfolios/lib/format";
+
+function Stat({ label, value, valueClassName }: { label: string; value: string; valueClassName?: string }) {
+  return (
+    <div>
+      <p className="text-muted-foreground text-xs">{label}</p>
+      <p className={`text-lg font-semibold tabular-nums ${valueClassName ?? ""}`}>{value}</p>
+    </div>
+  );
+}
+
+export function PortfolioSummaryCard({ portfolio }: { portfolio: PortfolioSummary }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          Summary
+          {portfolio.isPartial ? (
+            <Badge
+              variant="outline"
+              title="Some holdings have no live quote — their cost basis is used instead"
+            >
+              estimated
+            </Badge>
+          ) : null}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <Stat label="Invested capital" value={formatMoney(portfolio.investedCapital)} />
+        <Stat
+          label={portfolio.isPartial ? "Est. market value" : "Market value"}
+          value={formatMoney(portfolio.estimatedMarketValue)}
+        />
+        <Stat
+          label="Unrealized G/L"
+          value={
+            portfolio.totalUnrealizedGainLoss === null
+              ? "—"
+              : `${formatMoney(portfolio.totalUnrealizedGainLoss)} (${formatPercent(portfolio.totalUnrealizedGainLossPct)})`
+          }
+          valueClassName={gainLossClassName(portfolio.totalUnrealizedGainLoss)}
+        />
+        <Stat
+          label="Today"
+          value={formatMoney(portfolio.totalDailyGainLoss)}
+          valueClassName={gainLossClassName(portfolio.totalDailyGainLoss)}
+        />
+        <Stat
+          label="Realized G/L"
+          value={formatMoney(portfolio.totalRealizedGainLoss)}
+          valueClassName={gainLossClassName(portfolio.totalRealizedGainLoss)}
+        />
+      </CardContent>
+      {portfolio.concentrationWarnings.length > 0 ? (
+        <CardContent className="border-t pt-4">
+          <p className="text-muted-foreground mb-2 text-xs">Concentration warnings</p>
+          <div className="flex flex-wrap gap-2">
+            {portfolio.concentrationWarnings.map((holding) => (
+              <Badge key={holding.companyId} variant="destructive">
+                {holding.ticker} — {Number(holding.allocationPct).toFixed(1)}%
+              </Badge>
+            ))}
+          </div>
+        </CardContent>
+      ) : null}
+    </Card>
+  );
+}

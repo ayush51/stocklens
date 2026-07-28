@@ -10,6 +10,14 @@ interface TransactionForAggregate {
 export interface HoldingAggregate {
   quantity: Prisma.Decimal;
   averageCost: Prisma.Decimal;
+  /**
+   * Cumulative realized gain/loss across every SELL in the history, using
+   * the weighted-average cost at the moment of each sale. Re-derived from
+   * scratch each time (like quantity/averageCost), so a full sell-to-zero
+   * followed by a fresh buy correctly keeps the earlier round trip's
+   * realized P&L rather than losing it.
+   */
+  realizedGainLoss: Prisma.Decimal;
 }
 
 /**
@@ -26,6 +34,7 @@ export interface HoldingAggregate {
 export function computeHoldingAggregate(transactions: TransactionForAggregate[]): HoldingAggregate {
   let quantity = new Prisma.Decimal(0);
   let totalCost = new Prisma.Decimal(0);
+  let realizedGainLoss = new Prisma.Decimal(0);
 
   for (const tx of transactions) {
     const txQuantity = new Prisma.Decimal(tx.quantity);
@@ -38,6 +47,7 @@ export function computeHoldingAggregate(transactions: TransactionForAggregate[])
       if (quantity.greaterThan(0)) {
         const averageCost = totalCost.dividedBy(quantity);
         totalCost = totalCost.minus(averageCost.times(txQuantity));
+        realizedGainLoss = realizedGainLoss.plus(txPrice.minus(averageCost).times(txQuantity));
       }
       quantity = quantity.minus(txQuantity);
     }
@@ -46,7 +56,7 @@ export function computeHoldingAggregate(transactions: TransactionForAggregate[])
 
   const averageCost = quantity.greaterThan(0) ? totalCost.dividedBy(quantity) : new Prisma.Decimal(0);
 
-  return { quantity, averageCost };
+  return { quantity, averageCost, realizedGainLoss };
 }
 
 /**
@@ -66,11 +76,11 @@ export async function recomputeHolding(
     select: { type: true, quantity: true, price: true },
   });
 
-  const { quantity, averageCost } = computeHoldingAggregate(transactions);
+  const { quantity, averageCost, realizedGainLoss } = computeHoldingAggregate(transactions);
 
   await prisma.holding.upsert({
     where: { portfolioId_companyId: { portfolioId, companyId } },
-    update: { quantity, averageCost },
-    create: { portfolioId, companyId, quantity, averageCost },
+    update: { quantity, averageCost, realizedGainLoss },
+    create: { portfolioId, companyId, quantity, averageCost, realizedGainLoss },
   });
 }
