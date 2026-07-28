@@ -14,6 +14,24 @@ const initialState: AuthActionState = { error: null };
 export default function SignUpPage() {
   const [state, formAction, isPending] = useActionState(signUpWithPassword, initialState);
 
+  if (state.checkEmail) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Check your email</CardTitle>
+          <CardDescription>
+            We sent a confirmation link to finish creating your account. Click it, then sign in.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link href="/sign-in" className="text-foreground text-sm font-medium hover:underline">
+            Back to sign in
+          </Link>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
