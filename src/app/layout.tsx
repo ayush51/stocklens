@@ -8,7 +8,7 @@ import { Toaster } from "@/components/ui/sonner";
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "ThesisTrack",
+  title: "StockLens",
   description: "Investment research and thesis-tracking for any publicly traded company.",
 };
 

@@ -12,7 +12,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-6">
       <Link href="/" className="mb-8 text-lg font-semibold">
-        ThesisTrack
+        StockLens
       </Link>
       <div className="w-full max-w-sm">{children}</div>
     </div>

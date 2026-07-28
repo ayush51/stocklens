@@ -31,7 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex min-h-screen">
         <aside className="border-border hidden w-56 shrink-0 border-r px-4 py-6 sm:block">
           <Link href="/dashboard" className="mb-6 block text-lg font-semibold">
-            ThesisTrack
+            StockLens
           </Link>
           <nav className="flex flex-col gap-1">
             {NAV_ITEMS.map((item) => (

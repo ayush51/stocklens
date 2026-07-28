@@ -3,7 +3,7 @@
 Feature-based architecture: `app/` is routing-only and stays thin; each feature owns its server logic, UI, and types under `src/features/*`. Cross-cutting infrastructure lives in `src/shared` and `src/lib`.
 
 ```
-thesistrack/
+stocklens/
 ├── prisma/
 │   ├── schema.prisma
 │   ├── migrations/

@@ -1,4 +1,4 @@
-// ThesisTrack data model.
+// StockLens data model.
 // Design rationale: docs/phase-0/04-database-design.md and docs/phase-0/05-prisma-schema.md
 // Connection URLs live in prisma.config.ts (Prisma 7) — see .agents/skills/prisma-upgrade-v7.
 //

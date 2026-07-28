@@ -1,4 +1,4 @@
-# ThesisTrack — Phase 0
+# StockLens — Phase 0
 
 Phase 0 is design-only: no application code, no `package.json`, no `prisma/schema.prisma` committed to the project yet. Everything below is a decision record. Once this is reviewed and approved, Phase 1 (project scaffolding) begins per [11-implementation-plan.md](./11-implementation-plan.md).
 

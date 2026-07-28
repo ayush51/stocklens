@@ -18,7 +18,7 @@ export default function SignInPage() {
     <Card>
       <CardHeader>
         <CardTitle>Sign in</CardTitle>
-        <CardDescription>Welcome back to ThesisTrack.</CardDescription>
+        <CardDescription>Welcome back to StockLens.</CardDescription>
       </CardHeader>
       <CardContent>
         <form action={formAction} className="space-y-4">

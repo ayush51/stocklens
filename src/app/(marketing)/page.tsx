@@ -7,7 +7,7 @@ export default function HomePage() {
         Track the thesis behind every position.
       </h1>
       <p className="text-muted-foreground mt-4 text-lg text-balance">
-        ThesisTrack connects your portfolio to the research behind it — filings, earnings, and
+        StockLens connects your portfolio to the research behind it — filings, earnings, and
         the reasoning you wrote down before the market moved. Works with any publicly traded
         company.
       </p>

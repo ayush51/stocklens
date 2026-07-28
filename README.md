@@ -1,4 +1,4 @@
-# ThesisTrack
+# StockLens
 
 A plug-and-play investment research and thesis-tracking dashboard for any publicly traded company. See [`docs/phase-0/`](./docs/phase-0/README.md) for the full design package (PRD, architecture, database design, security model, implementation plan).
 

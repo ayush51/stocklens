@@ -2,7 +2,7 @@
 
 ## 1. Vision
 
-ThesisTrack is a plug-and-play investment research and thesis-tracking platform. A user connects or manually builds a portfolio of **any publicly traded company**, then tracks not just price and P&L but *why* they hold each position — the thesis, the catalysts, the filings, the earnings history — in one place. Nothing in the product is specific to any single company, sector, or exchange; the entire data model resolves around a generic `Company` entity keyed by ticker/CIK.
+StockLens is a plug-and-play investment research and thesis-tracking platform. A user connects or manually builds a portfolio of **any publicly traded company**, then tracks not just price and P&L but *why* they hold each position — the thesis, the catalysts, the filings, the earnings history — in one place. Nothing in the product is specific to any single company, sector, or exchange; the entire data model resolves around a generic `Company` entity keyed by ticker/CIK.
 
 ## 2. Problem
 
