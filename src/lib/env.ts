@@ -30,6 +30,27 @@ const envSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+
+  // Brokerage sync (see docs/phase-0/09-security-model.md §3)
+  // Base64-encoded 32-byte key for AES-256-GCM envelope encryption of
+  // brokerage credentials (EncryptedSecret table). Generate with:
+  // `openssl rand -base64 32`. Never reused for anything else.
+  CREDENTIAL_ENCRYPTION_KEY: z
+    .string()
+    .refine((value) => {
+      try {
+        return Buffer.from(value, "base64").length === 32;
+      } catch {
+        return false;
+      }
+    }, "must be a base64-encoded 32-byte key (openssl rand -base64 32)"),
+  // Global kill switch — checked before every brokerage sync attempt.
+  // "false" disables all sync activity across every workspace immediately,
+  // no deploy required. Defaults to enabled.
+  BROKERAGE_SYNC_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
 });
 
 export type Env = z.infer<typeof envSchema>;

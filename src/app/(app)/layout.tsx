@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 // /dashboard is a real page today.
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/settings/integrations/robinhood", label: "Connect Robinhood" },
   { href: "/portfolios", label: "Portfolios" },
   { href: "/theses", label: "Theses" },
   { href: "/alerts", label: "Alerts" },
