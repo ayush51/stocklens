@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { ensureWorkspaceForUser } from "@/lib/auth/ensure-workspace";
 import { signOut } from "@/lib/auth/actions";
 import { WorkspaceProvider } from "@/shared/hooks/use-workspace";
+import { CompanySearchBox } from "@/features/companies/components/company-search-box";
 import { Button } from "@/components/ui/button";
 
 // Phase 2 features land under these paths (docs/phase-0/06-routes.md); the
@@ -46,9 +47,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </nav>
         </aside>
         <div className="flex flex-1 flex-col">
-          <header className="border-border flex items-center justify-between border-b px-6 py-4">
-            <span className="text-muted-foreground text-sm">{workspaceName}</span>
-            <div className="flex items-center gap-3">
+          <header className="border-border flex items-center justify-between gap-4 border-b px-6 py-4">
+            <span className="text-muted-foreground shrink-0 text-sm">{workspaceName}</span>
+            <CompanySearchBox />
+            <div className="flex shrink-0 items-center gap-3">
               <span className="text-muted-foreground text-sm">{user.email}</span>
               <form action={signOut}>
                 <Button type="submit" variant="outline" size="sm">
