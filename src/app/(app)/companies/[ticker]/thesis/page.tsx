@@ -6,6 +6,8 @@ import { ensureWorkspaceForUser } from "@/lib/auth/ensure-workspace";
 import { getOrResolveCompanyByTicker, normalizeTicker } from "@/features/companies/server/queries";
 import { getThesisForCompany } from "@/features/thesis/server/queries";
 import { ThesisView } from "@/features/thesis/components/thesis-view";
+import { getScorecardForThesis } from "@/features/thesis-scorecard/server/queries";
+import { Scorecard } from "@/features/thesis-scorecard/components/scorecard";
 import { EmptyState } from "@/shared/components/empty-state";
 import { Button } from "@/components/ui/button";
 
@@ -35,5 +37,12 @@ export default async function CompanyThesisPage({ params }: { params: Promise<{ 
     );
   }
 
-  return <ThesisView thesis={thesis} ticker={ticker} />;
+  const scorecard = await getScorecardForThesis(user.id, thesis.id);
+
+  return (
+    <div className="space-y-6">
+      <ThesisView thesis={thesis} ticker={ticker} />
+      <Scorecard thesisId={thesis.id} ticker={ticker} scorecard={scorecard} />
+    </div>
+  );
 }

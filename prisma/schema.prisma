@@ -421,14 +421,89 @@ model Thesis {
   createdAt               DateTime        @default(now())
   updatedAt               DateTime        @updatedAt
 
-  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  company     Company          @relation(fields: [companyId], references: [id])
-  holding     Holding?         @relation(fields: [holdingId], references: [id])
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company     Company           @relation(fields: [companyId], references: [id])
+  holding     Holding?          @relation(fields: [holdingId], references: [id])
   revisions   ThesisRevision[]
   aiSummaries AISummary[]
+  criteria    ThesisCriterion[]
 
   @@index([workspaceId])
   @@index([companyId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Thesis scorecard — configurable Green/Watch/Red criteria. Tenant data
+// (scoped through Thesis -> Workspace), unlike MetricDefinition/
+// CompanyMetricTemplate which are global reference data: a criterion and
+// its threshold judgment calls belong to one workspace's thesis, not to
+// the company objectively.
+// ─────────────────────────────────────────────────────────────
+enum CriterionDirection {
+  HIGHER_IS_BETTER
+  LOWER_IS_BETTER
+}
+
+enum CriterionRuleType {
+  NUMERIC_THRESHOLD
+  PERCENT_GROWTH_THRESHOLD
+  SEQUENTIAL_CHANGE
+  YEAR_OVER_YEAR_CHANGE
+  CONSECUTIVE_DETERIORATION
+  BOOLEAN_EVENT
+  QUALITATIVE_MANUAL
+}
+
+model ThesisCriterion {
+  id                           String             @id @default(uuid()) @db.Uuid
+  thesisId                     String             @db.Uuid
+  metricLabel                  String
+  direction                    CriterionDirection @default(HIGHER_IS_BETTER)
+  ruleType                     CriterionRuleType
+  greenRule                    String // human-readable description, e.g. "RPO growth >= 20% YoY"
+  watchRule                    String
+  redRule                      String
+  // Numeric boundaries feeding suggestCriterionStatus() — null for
+  // BOOLEAN_EVENT/QUALITATIVE_MANUAL criteria, which never auto-suggest.
+  greenThreshold               Decimal?           @db.Decimal(20, 4)
+  watchThreshold               Decimal?           @db.Decimal(20, 4)
+  evaluationPeriod             String             @default("Quarterly")
+  consecutivePeriodRequirement Int                @default(1)
+  displayOrder                 Int                @default(0)
+  createdAt                    DateTime           @default(now())
+  updatedAt                    DateTime           @updatedAt
+
+  thesis      Thesis             @relation(fields: [thesisId], references: [id], onDelete: Cascade)
+  evaluations ThesisEvaluation[]
+
+  @@index([thesisId])
+}
+
+enum CriterionStatus {
+  GREEN
+  WATCH
+  RED
+  INSUFFICIENT_DATA
+}
+
+model ThesisEvaluation {
+  id               String          @id @default(uuid()) @db.Uuid
+  criterionId      String          @db.Uuid
+  fiscalYear       Int
+  fiscalPeriod     FiscalPeriod
+  currentValue     String?
+  previousValue    String?
+  status           CriterionStatus @default(INSUFFICIENT_DATA)
+  explanation      String?
+  source           String?
+  overrideReason   String?
+  isManualOverride Boolean         @default(false)
+  evaluatedAt      DateTime        @default(now())
+
+  criterion ThesisCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+
+  @@unique([criterionId, fiscalYear, fiscalPeriod])
+  @@index([criterionId, fiscalYear, fiscalPeriod])
 }
 
 enum ThesisRevisionTrigger {
