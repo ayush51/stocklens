@@ -1,0 +1,65 @@
+/**
+ * Market-data boundary — implemented by features/market-data/providers/*
+ * so feature code never talks to a vendor SDK or raw fetch call directly.
+ * See docs/phase-0/02-architecture.md §3 and the filings/brokerage-sync
+ * contracts for the same pattern.
+ *
+ * Every value that can be stale, delayed, or simply unavailable says so
+ * explicitly — nothing in this interface may fabricate a price. A provider
+ * that can't answer returns null, never a guess.
+ */
+
+export interface Quote {
+  ticker: string;
+  price: string; // decimal string — parsed to Prisma Decimal at the write boundary
+  previousClose: string | null;
+  currency: string;
+  /** When the exchange last updated this price, not when we fetched it. */
+  marketTimestamp: string; // ISO 8601
+  /** When this application retrieved the quote. */
+  retrievedAt: string; // ISO 8601
+  isDelayed: boolean;
+  source: string; // provider name, e.g. "finnhub"
+}
+
+export interface PriceBar {
+  date: string; // YYYY-MM-DD
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  volume: string;
+}
+
+export interface CorporateAction {
+  ticker: string;
+  type: "SPLIT" | "DIVIDEND";
+  exDate: string; // YYYY-MM-DD
+  /** Split ratio as new:old, e.g. "4:1". Only set when type is SPLIT. */
+  splitRatio: string | null;
+  /** Cash amount per share. Only set when type is DIVIDEND. */
+  dividendAmount: string | null;
+}
+
+export interface SecurityMetadata {
+  ticker: string;
+  name: string;
+  exchange: string | null;
+  currency: string;
+  marketCap: string | null;
+}
+
+export interface EarningsDate {
+  ticker: string;
+  date: string; // YYYY-MM-DD
+  isEstimate: boolean;
+}
+
+export interface MarketDataProvider {
+  readonly name: string;
+  getQuote(ticker: string): Promise<Quote | null>;
+  getHistoricalPrices(ticker: string, from: string, to: string): Promise<PriceBar[]>;
+  getCorporateActions(ticker: string, from: string, to: string): Promise<CorporateAction[]>;
+  getSecurityMetadata(ticker: string): Promise<SecurityMetadata | null>;
+  getNextEarningsDate(ticker: string): Promise<EarningsDate | null>;
+}

@@ -30,6 +30,13 @@ const envSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+
+  // Market data (quotes, historical prices, corporate actions, earnings
+  // dates) — see src/shared/contracts/market-data-provider.ts. Optional:
+  // absent means src/features/market-data/server/get-provider.ts falls back
+  // to the fail-closed UnavailableMarketDataProvider rather than crashing
+  // the app. Get a free-tier key at https://finnhub.io/register.
+  FINNHUB_API_KEY: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
