@@ -25,4 +25,13 @@ export const unavailableMarketDataProvider: MarketDataProvider = {
   async getNextEarningsDate() {
     return null;
   },
+  async getCompanyNews() {
+    return [];
+  },
+  async getFundamentalRatios() {
+    return null;
+  },
+  async getAnalystRecommendations() {
+    return [];
+  },
 };

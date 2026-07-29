@@ -80,5 +80,35 @@ export function describeMarketDataProviderContract(fixture: MarketDataProviderCo
         expect(bar.date <= fixture.historicalRange.to).toBe(true);
       }
     });
+
+    it("resolves an empty array (never throws) for an unknown ticker's news", async () => {
+      await expect(
+        fixture.provider.getCompanyNews(
+          fixture.unknownTicker,
+          fixture.historicalRange.from,
+          fixture.historicalRange.to,
+        ),
+      ).resolves.toEqual([]);
+    });
+
+    it("every news item has a real URL and source, never a fabricated one", async () => {
+      const news = await fixture.provider.getCompanyNews(
+        fixture.validTicker,
+        fixture.historicalRange.from,
+        fixture.historicalRange.to,
+      );
+      for (const item of news) {
+        expect(item.url).toMatch(/^https?:\/\//);
+        expect(item.source.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("resolves null for an unknown ticker's fundamental ratios", async () => {
+      await expect(fixture.provider.getFundamentalRatios(fixture.unknownTicker)).resolves.toBeNull();
+    });
+
+    it("resolves an empty array for an unknown ticker's analyst recommendations", async () => {
+      await expect(fixture.provider.getAnalystRecommendations(fixture.unknownTicker)).resolves.toEqual([]);
+    });
   });
 }

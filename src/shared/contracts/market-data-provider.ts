@@ -55,6 +55,47 @@ export interface EarningsDate {
   isEstimate: boolean;
 }
 
+export interface NewsItem {
+  id: string;
+  ticker: string;
+  headline: string;
+  summary: string;
+  source: string;
+  url: string;
+  imageUrl: string | null;
+  publishedAt: string; // ISO 8601
+}
+
+/**
+ * Fields are null, not zero or guessed, when the provider doesn't have or
+ * doesn't expose them. peRatioForward comes from Finnhub's basic-financials
+ * bundle (confirmed present on the free tier), which is a different
+ * endpoint from — and available despite — its dedicated consensus-estimates
+ * endpoint being paywalled; treat it as Finnhub's own computed figure, not
+ * something this app derives.
+ */
+export interface FundamentalRatios {
+  ticker: string;
+  peRatioTrailing: string | null;
+  peRatioForward: string | null;
+  priceToBook: string | null;
+  beta: string | null;
+  dividendYieldTtm: string | null;
+  week52High: string | null;
+  week52Low: string | null;
+  asOf: string; // ISO 8601 — retrieval time, this is a snapshot of a slow-changing bundle
+}
+
+export interface AnalystRecommendation {
+  ticker: string;
+  period: string; // YYYY-MM-DD, first of month
+  strongBuy: number;
+  buy: number;
+  hold: number;
+  sell: number;
+  strongSell: number;
+}
+
 export interface MarketDataProvider {
   readonly name: string;
   getQuote(ticker: string): Promise<Quote | null>;
@@ -62,4 +103,7 @@ export interface MarketDataProvider {
   getCorporateActions(ticker: string, from: string, to: string): Promise<CorporateAction[]>;
   getSecurityMetadata(ticker: string): Promise<SecurityMetadata | null>;
   getNextEarningsDate(ticker: string): Promise<EarningsDate | null>;
+  getCompanyNews(ticker: string, from: string, to: string): Promise<NewsItem[]>;
+  getFundamentalRatios(ticker: string): Promise<FundamentalRatios | null>;
+  getAnalystRecommendations(ticker: string): Promise<AnalystRecommendation[]>;
 }

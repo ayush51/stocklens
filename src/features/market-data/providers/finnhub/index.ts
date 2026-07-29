@@ -1,7 +1,10 @@
 import type {
+  AnalystRecommendation,
   CorporateAction,
   EarningsDate,
+  FundamentalRatios,
   MarketDataProvider,
+  NewsItem,
   PriceBar,
   Quote,
   SecurityMetadata,
@@ -10,7 +13,10 @@ import type {
 /**
  * Verified against the live API on 2026-07-29 with a real free-tier key.
  * Confirmed working: getQuote, getSecurityMetadata, getNextEarningsDate,
- * and the unknown-ticker-returns-null path.
+ * getCompanyNews, getFundamentalRatios (including forwardPE — present in
+ * this bundle despite the separate consensus-estimates endpoint being
+ * paywalled), getAnalystRecommendations, and the unknown-ticker-returns-
+ * null/empty path for all of them.
  *
  * getHistoricalPrices and getCorporateActions correctly return an empty
  * array on the free tier — not a bug: Finnhub's /stock/candle and
@@ -63,6 +69,39 @@ interface FinnhubEarningsCalendarEntry {
 
 interface FinnhubEarningsCalendarResponse {
   earningsCalendar: FinnhubEarningsCalendarEntry[];
+}
+
+interface FinnhubNewsEntry {
+  id: number;
+  headline: string;
+  summary: string;
+  source: string;
+  url: string;
+  image?: string;
+  datetime: number; // unix seconds
+}
+
+interface FinnhubMetricResponse {
+  metric?: {
+    peTTM?: number;
+    forwardPE?: number;
+    pbQuarterly?: number;
+    pb?: number;
+    beta?: number;
+    currentDividendYieldTTM?: number;
+    "52WeekHigh"?: number;
+    "52WeekLow"?: number;
+  };
+}
+
+interface FinnhubRecommendationEntry {
+  symbol: string;
+  period: string;
+  strongBuy: number;
+  buy: number;
+  hold: number;
+  sell: number;
+  strongSell: number;
 }
 
 function toUnixSeconds(dateStr: string): number {
@@ -165,6 +204,60 @@ export function createFinnhubMarketDataProvider(apiKey: string): MarketDataProvi
       if (!next) return null;
 
       return { ticker, date: next.date, isEstimate: true };
+    },
+
+    async getCompanyNews(ticker: string, from: string, to: string): Promise<NewsItem[]> {
+      const data = await get<FinnhubNewsEntry[]>("/company-news", { symbol: ticker, from, to });
+      if (!data) return [];
+
+      return data.map((entry) => ({
+        id: String(entry.id),
+        ticker,
+        headline: entry.headline,
+        summary: entry.summary,
+        source: entry.source,
+        url: entry.url,
+        imageUrl: entry.image || null,
+        publishedAt: new Date(entry.datetime * 1000).toISOString(),
+      }));
+    },
+
+    async getFundamentalRatios(ticker: string): Promise<FundamentalRatios | null> {
+      const data = await get<FinnhubMetricResponse>("/stock/metric", { symbol: ticker, metric: "all" });
+      const metric = data?.metric;
+      // Finnhub returns 200 with {"metric":{}} for an unresolvable symbol
+      // rather than a 404/empty body — verified directly, not assumed.
+      if (!metric || Object.keys(metric).length === 0) return null;
+
+      const toStringOrNull = (value: number | undefined) =>
+        typeof value === "number" ? String(value) : null;
+
+      return {
+        ticker,
+        peRatioTrailing: toStringOrNull(metric.peTTM),
+        peRatioForward: toStringOrNull(metric.forwardPE),
+        priceToBook: toStringOrNull(metric.pbQuarterly ?? metric.pb),
+        beta: toStringOrNull(metric.beta),
+        dividendYieldTtm: toStringOrNull(metric.currentDividendYieldTTM),
+        week52High: toStringOrNull(metric["52WeekHigh"]),
+        week52Low: toStringOrNull(metric["52WeekLow"]),
+        asOf: new Date().toISOString(),
+      };
+    },
+
+    async getAnalystRecommendations(ticker: string): Promise<AnalystRecommendation[]> {
+      const data = await get<FinnhubRecommendationEntry[]>("/stock/recommendation", { symbol: ticker });
+      if (!data) return [];
+
+      return data.map((entry) => ({
+        ticker,
+        period: entry.period,
+        strongBuy: entry.strongBuy,
+        buy: entry.buy,
+        hold: entry.hold,
+        sell: entry.sell,
+        strongSell: entry.strongSell,
+      }));
     },
   };
 }

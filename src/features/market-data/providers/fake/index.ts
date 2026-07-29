@@ -1,7 +1,10 @@
 import type {
+  AnalystRecommendation,
   CorporateAction,
   EarningsDate,
+  FundamentalRatios,
   MarketDataProvider,
+  NewsItem,
   PriceBar,
   Quote,
   SecurityMetadata,
@@ -20,6 +23,9 @@ const FIXTURES: Record<
     actions: CorporateAction[];
     metadata: SecurityMetadata;
     earnings: EarningsDate;
+    news: NewsItem[];
+    ratios: FundamentalRatios;
+    recommendations: AnalystRecommendation[];
   }
 > = {
   AAPL: {
@@ -49,6 +55,32 @@ const FIXTURES: Record<
       marketCap: "3400000000000",
     },
     earnings: { ticker: "AAPL", date: "2026-10-30", isEstimate: true },
+    news: [
+      {
+        id: "fake-1",
+        ticker: "AAPL",
+        headline: "Apple announces new product",
+        summary: "A fake summary for testing.",
+        source: "Fake Wire",
+        url: "https://example.com/fake-news-1",
+        imageUrl: null,
+        publishedAt: "2026-07-26T14:00:00.000Z",
+      },
+    ],
+    ratios: {
+      ticker: "AAPL",
+      peRatioTrailing: "31.5",
+      peRatioForward: "29.2",
+      priceToBook: "25.6",
+      beta: "1.08",
+      dividendYieldTtm: "0.31",
+      week52High: "342.89",
+      week52Low: "201.50",
+      asOf: "2026-07-27T12:00:00.000Z",
+    },
+    recommendations: [
+      { ticker: "AAPL", period: "2026-07-01", strongBuy: 13, buy: 23, hold: 16, sell: 2, strongSell: 0 },
+    ],
   },
 };
 
@@ -71,6 +103,18 @@ export function createFakeMarketDataProvider(): MarketDataProvider {
     },
     async getNextEarningsDate(ticker) {
       return FIXTURES[ticker]?.earnings ?? null;
+    },
+    async getCompanyNews(ticker, from, to) {
+      const news = FIXTURES[ticker]?.news ?? [];
+      return news.filter(
+        (item) => item.publishedAt.slice(0, 10) >= from && item.publishedAt.slice(0, 10) <= to,
+      );
+    },
+    async getFundamentalRatios(ticker) {
+      return FIXTURES[ticker]?.ratios ?? null;
+    },
+    async getAnalystRecommendations(ticker) {
+      return FIXTURES[ticker]?.recommendations ?? [];
     },
   };
 }
