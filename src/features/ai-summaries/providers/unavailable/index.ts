@@ -28,4 +28,10 @@ export const unavailableAISummaryProvider: AISummaryProvider = {
       "The AI assistant isn't configured yet — GEMINI_API_KEY is not set.",
     );
   },
+  async draftThesis() {
+    throw new AppError(
+      "UPSTREAM_UNAVAILABLE",
+      "AI thesis drafting isn't configured yet — GEMINI_API_KEY is not set.",
+    );
+  },
 };

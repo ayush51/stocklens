@@ -7,6 +7,8 @@ import { ensureWorkspaceForUser } from "@/lib/auth/ensure-workspace";
 import { forUser } from "@/lib/db/rls";
 import { AppError } from "@/lib/errors";
 import { thesisFormSchema } from "@/features/thesis/validation/thesis";
+import { generateThesisDraft } from "@/features/thesis/server/generate-draft";
+import type { ThesisDraftContent } from "@/features/thesis/lib/thesis-draft-schema";
 
 /**
  * Creates a thesis, or edits the existing one — never overwrites history.
@@ -89,4 +91,20 @@ export async function saveThesis(input: unknown): Promise<{ thesisId: string }> 
 
   revalidatePath(`/companies/${data.ticker}/thesis`);
   return { thesisId: existing.id };
+}
+
+/**
+ * User-triggered only — costs real money against a real API key. Returns
+ * draft text for the thesis form to pre-fill; never writes anything itself
+ * (saveThesis, above, is the only write path, and it's only reached via
+ * the user's own explicit form submission).
+ */
+export async function draftThesisWithAi(
+  companyId: string,
+  cik: string | null,
+  ticker: string,
+  companyName: string,
+): Promise<ThesisDraftContent> {
+  await requireUser();
+  return generateThesisDraft(companyId, cik, ticker, companyName);
 }

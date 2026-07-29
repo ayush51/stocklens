@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import { SparklesIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { saveThesis } from "@/features/thesis/server/actions";
+import { Badge } from "@/components/ui/badge";
+import { saveThesis, draftThesisWithAi } from "@/features/thesis/server/actions";
 import {
   CONVICTION_LEVELS,
   THESIS_STATUSES,
@@ -27,10 +30,14 @@ function toDateInputValue(date: Date | null): string {
 
 export function ThesisForm({
   companyId,
+  cik,
+  companyName,
   ticker,
   existing,
 }: {
   companyId: string;
+  cik: string | null;
+  companyName: string;
   ticker: string;
   existing?: Thesis | null;
 }) {
@@ -79,8 +86,58 @@ export function ThesisForm({
     }
   }
 
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftApplied, setDraftApplied] = useState(false);
+
+  async function handleDraftWithAi() {
+    setDraftLoading(true);
+    try {
+      const draft = await draftThesisWithAi(companyId, cik, ticker, companyName);
+      setValue("summary", draft.summary);
+      setValue("whyMispriced", draft.whyMispriced);
+      setValue("expectedDrivers", draft.expectedDrivers);
+      setValue("risks", draft.risks);
+      setValue("keyAssumptions", draft.keyAssumptions);
+      setDraftApplied(true);
+      toast.success("Draft applied — review and edit every field before saving.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not generate a draft.");
+    } finally {
+      setDraftLoading(false);
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      {!existing ? (
+        <div className="border-border bg-muted/30 flex items-center justify-between gap-4 rounded-lg border p-3">
+          <div className="text-sm">
+            <p className="font-medium">Not sure where to start?</p>
+            <p className="text-muted-foreground">
+              Draft a skeleton from this company&apos;s real financial data — you review, edit, and decide
+              everything before it saves.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleDraftWithAi}
+            disabled={draftLoading}
+          >
+            <SparklesIcon className="size-3.5" /> {draftLoading ? "Drafting…" : "Draft with AI"}
+          </Button>
+        </div>
+      ) : null}
+      {draftApplied ? (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+          <Badge variant="outline">AI draft</Badge>
+          <span>
+            Summary, mispricing hypothesis, drivers, risks, and assumptions below are an unreviewed AI draft —
+            read and edit each one before saving. Nothing is saved until you click Save.
+          </span>
+        </div>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>Overview</CardTitle>

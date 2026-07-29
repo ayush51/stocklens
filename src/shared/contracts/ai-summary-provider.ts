@@ -44,6 +44,14 @@ export interface ChatRequest {
   promptVersion: string;
 }
 
+export interface ThesisDraftRequest {
+  ticker: string;
+  companyName: string;
+  /** Real, DB/provider-sourced financial data (statements, ratios, cached summary) — not user-authored. */
+  content: string;
+  promptVersion: string;
+}
+
 export interface AISummaryProvider {
   summarize(request: AISummaryRequest): Promise<AISummaryResult>;
   /**
@@ -61,4 +69,13 @@ export interface AISummaryProvider {
    * extractMetrics.
    */
   chat(request: ChatRequest): Promise<AISummaryResult>;
+  /**
+   * Drafts a starting-point investment thesis from real financial data —
+   * never a finished thesis, never auto-saved (see thesis/server/
+   * generate-draft.ts and instructions.md §8: "Do not silently generate a
+   * thesis and represent it as user-authored"). result.content is a JSON
+   * string encoding ThesisDraftContent — see
+   * thesis/lib/thesis-draft-schema.ts.
+   */
+  draftThesis(request: ThesisDraftRequest): Promise<AISummaryResult>;
 }

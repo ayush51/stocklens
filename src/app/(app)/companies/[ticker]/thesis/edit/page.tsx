@@ -25,7 +25,13 @@ export default async function EditThesisPage({ params }: { params: Promise<{ tic
         title={thesis ? "Edit thesis" : "Write a thesis"}
         description={`${company.name} (${ticker})`}
       />
-      <ThesisForm companyId={company.id} ticker={ticker} existing={thesis} />
+      <ThesisForm
+        companyId={company.id}
+        cik={company.cik}
+        companyName={company.name}
+        ticker={ticker}
+        existing={thesis}
+      />
     </div>
   );
 }
