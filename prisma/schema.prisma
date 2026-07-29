@@ -239,6 +239,7 @@ model Company {
   theses                 Thesis[]
   metricTemplate         CompanyMetricTemplate?
   decisionJournalEntries DecisionJournalEntry[]
+  aiSummaries            AISummary[]
 }
 
 model PriceSnapshot {
@@ -712,12 +713,13 @@ enum AISummarySubjectType {
   SEC_FILING
   EARNINGS_EVENT
   THESIS
+  COMPANY_FINANCIALS
 }
 
 model AISummary {
   id              String               @id @default(uuid()) @db.Uuid
-  // Null for SEC_FILING/EARNINGS_EVENT summaries — those are objectively
-  // about a global-reference-data document (like FinancialStatement),
+  // Null for SEC_FILING/EARNINGS_EVENT/COMPANY_FINANCIALS summaries — those
+  // are objectively about global-reference-data (like FinancialStatement),
   // generated once and cached for every workspace, not duplicated per
   // tenant. Set only for THESIS summaries, which are genuinely
   // workspace-specific. See ai-summaries/server/*.
@@ -726,6 +728,10 @@ model AISummary {
   secFilingId     String?              @db.Uuid
   earningsEventId String?              @db.Uuid
   thesisId        String?              @db.Uuid
+  // Set only for COMPANY_FINANCIALS — keyed by company, not a single
+  // FinancialStatement row, since the summary covers the last several
+  // reported periods together.
+  companyId       String?              @db.Uuid
   inputHash       String // hash(subject content + prompt version + model id)
   model           String
   promptVersion   String
@@ -736,8 +742,9 @@ model AISummary {
   secFiling     SecFiling?     @relation(fields: [secFilingId], references: [id])
   earningsEvent EarningsEvent? @relation(fields: [earningsEventId], references: [id])
   thesis        Thesis?        @relation(fields: [thesisId], references: [id])
+  company       Company?       @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  @@unique([subjectType, secFilingId, earningsEventId, thesisId, inputHash])
+  @@unique([subjectType, secFilingId, earningsEventId, thesisId, companyId, inputHash])
 }
 
 // ─────────────────────────────────────────────────────────────

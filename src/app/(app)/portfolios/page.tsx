@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { getPortfoliosForUser } from "@/features/portfolios/server/queries";
 import { HoldingsTable } from "@/features/portfolios/components/holdings-table";
 import { PortfolioSummaryCard } from "@/features/portfolios/components/portfolio-summary";
+import { AllocationChart } from "@/features/portfolios/components/allocation-chart";
 import { PageHeader } from "@/shared/components/page-header";
 import { EmptyState } from "@/shared/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +45,8 @@ export default async function PortfoliosPage() {
             </div>
 
             <PortfolioSummaryCard portfolio={portfolio} />
+
+            <AllocationChart holdings={[...portfolio.stocks, ...portfolio.etfs]} />
 
             {portfolio.stocks.length > 0 ? (
               <Card>

@@ -5,10 +5,12 @@ import { getFinancialStatementsForCompany } from "@/features/financial-metrics/s
 import { getFilingsForCompany } from "@/features/filings/server/queries";
 import { getRatiosAndRecommendationsForCompany } from "@/features/company-ratios/server/queries";
 import { getCachedFilingSummaries } from "@/features/ai-summaries/server/queries";
+import { getPriceHistoryForCompany } from "@/features/market-data/server/queries";
 import { MetricsTable } from "@/features/financial-metrics/components/metrics-table";
 import { FilingsList } from "@/features/filings/components/filings-list";
 import { RatiosPanel } from "@/features/company-ratios/components/ratios-panel";
 import { AnalystRecommendationWidget } from "@/features/company-ratios/components/analyst-recommendation-widget";
+import { PriceHistoryChart } from "@/features/market-data/components/price-history-chart";
 import { EmptyState } from "@/shared/components/empty-state";
 
 export default async function CompanyOverviewPage({ params }: { params: Promise<{ ticker: string }> }) {
@@ -17,10 +19,11 @@ export default async function CompanyOverviewPage({ params }: { params: Promise<
   const company = await getOrResolveCompanyByTicker(ticker);
   if (!company) return null; // layout already rendered the not-found state
 
-  const [statements, filings, { ratios, recommendations }] = await Promise.all([
+  const [statements, filings, { ratios, recommendations }, priceHistory] = await Promise.all([
     getFinancialStatementsForCompany(company.id, company.cik),
     getFilingsForCompany(company.id, company.cik),
     getRatiosAndRecommendationsForCompany(ticker),
+    getPriceHistoryForCompany(ticker),
   ]);
 
   const recentFilings = filings.slice(0, 3);
@@ -28,6 +31,8 @@ export default async function CompanyOverviewPage({ params }: { params: Promise<
 
   return (
     <div className="space-y-8">
+      <PriceHistoryChart quote={priceHistory.quote} bars={priceHistory.bars} />
+
       {ratios || recommendations.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {ratios ? <RatiosPanel ratios={ratios} /> : null}

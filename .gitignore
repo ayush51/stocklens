@@ -59,3 +59,4 @@ prisma/generated/
 
 # supabase CLI local state (project ref only, no secrets — still not shared config)
 supabase/.temp/
+.scratch/

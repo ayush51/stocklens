@@ -16,4 +16,16 @@ export const unavailableAISummaryProvider: AISummaryProvider = {
       "AI summaries aren't configured yet — GEMINI_API_KEY is not set.",
     );
   },
+  async extractMetrics() {
+    throw new AppError(
+      "UPSTREAM_UNAVAILABLE",
+      "AI KPI extraction isn't configured yet — GEMINI_API_KEY is not set.",
+    );
+  },
+  async chat() {
+    throw new AppError(
+      "UPSTREAM_UNAVAILABLE",
+      "The AI assistant isn't configured yet — GEMINI_API_KEY is not set.",
+    );
+  },
 };

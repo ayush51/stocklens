@@ -6,6 +6,7 @@ import { ensureWorkspaceForUser } from "@/lib/auth/ensure-workspace";
 import { signOut } from "@/lib/auth/actions";
 import { WorkspaceProvider } from "@/shared/hooks/use-workspace";
 import { CompanySearchBox } from "@/features/companies/components/company-search-box";
+import { ChatWidget } from "@/features/assistant/components/chat-widget";
 import { Button } from "@/components/ui/button";
 
 // Phase 2 features land under these paths (docs/phase-0/06-routes.md); the
@@ -66,6 +67,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <main className="flex-1 px-6 py-8">{children}</main>
         </div>
       </div>
+      <ChatWidget />
     </WorkspaceProvider>
   );
 }

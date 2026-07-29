@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { stripMarkdownFences } from "@/features/ai-summaries/lib/strip-json-fences";
+
 /**
  * The structured shape every AISummaryProvider's `content` field must be a
  * JSON-encoding of, for SEC_FILING/EARNINGS_EVENT summaries. Parsed and
@@ -16,17 +18,6 @@ export const filingSummarySchema = z.object({
 });
 
 export type FilingSummaryContent = z.infer<typeof filingSummarySchema>;
-
-/**
- * Models sometimes wrap JSON in markdown code fences despite being told
- * not to — stripped defensively before parsing rather than trusting the
- * instruction was followed exactly.
- */
-function stripMarkdownFences(text: string): string {
-  const trimmed = text.trim();
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-  return fenced ? fenced[1] : trimmed;
-}
 
 export function parseFilingSummaryContent(raw: string): FilingSummaryContent | null {
   try {

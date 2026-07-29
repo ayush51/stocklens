@@ -5,6 +5,10 @@ import {
   getOrGenerateFilingSummary,
   type FilingSummaryResult,
 } from "@/features/ai-summaries/server/get-filing-summary";
+import {
+  getOrGenerateFinancialsSummary,
+  type FinancialsSummaryResult,
+} from "@/features/ai-summaries/server/get-financials-summary";
 
 /**
  * User-triggered only — never runs automatically. Generation costs real
@@ -16,4 +20,10 @@ import {
 export async function generateFilingSummary(filingId: string): Promise<FilingSummaryResult | null> {
   await requireUser();
   return getOrGenerateFilingSummary(filingId);
+}
+
+/** Same user-triggered-only reasoning as generateFilingSummary. */
+export async function generateFinancialsSummary(companyId: string): Promise<FinancialsSummaryResult | null> {
+  await requireUser();
+  return getOrGenerateFinancialsSummary(companyId);
 }

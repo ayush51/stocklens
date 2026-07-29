@@ -18,14 +18,19 @@ import type {
  * paywalled), getAnalystRecommendations, and the unknown-ticker-returns-
  * null/empty path for all of them.
  *
- * getHistoricalPrices and getCorporateActions correctly return an empty
- * array on the free tier — not a bug: Finnhub's /stock/candle and
- * /stock/split endpoints respond 403 ("You don't have access to this
- * resource") without a paid plan, and the `!response.ok` check in get()
- * below already treats that as "no data" rather than throwing. If a paid
- * plan is ever added, these should start returning real data with no code
- * change needed here — re-verify against the live API if that happens,
- * since the response shape itself is still unconfirmed for these two.
+ * getCorporateActions correctly returns an empty array on the free tier —
+ * not a bug: Finnhub's /stock/split endpoint responds 403 without a paid
+ * plan, and the `!response.ok` check in get() below already treats that as
+ * "no data" rather than throwing.
+ *
+ * getHistoricalPrices used to have the same 403-on-free-tier gap for
+ * Finnhub's /stock/candle, so it falls back to Yahoo Finance's unofficial
+ * chart endpoint (query1.finance.yahoo.com/v8/finance/chart) — free, no key,
+ * verified live on 2026-07-29 to return real daily OHLC bars. It's
+ * undocumented and could change or start blocking without notice, so this
+ * stays a fallback behind Finnhub (not a replacement), fails closed to an
+ * empty array on any error, and is never used for real-time quotes —
+ * getQuote still only trusts Finnhub.
  */
 
 const BASE_URL = "https://finnhub.io/api/v1";
@@ -108,6 +113,72 @@ function toUnixSeconds(dateStr: string): number {
   return Math.floor(new Date(dateStr).getTime() / 1000);
 }
 
+interface YahooChartResponse {
+  chart: {
+    result:
+      | [
+          {
+            timestamp: number[];
+            indicators: {
+              quote: [{ open: number[]; high: number[]; low: number[]; close: number[]; volume: number[] }];
+            };
+          },
+        ]
+      | null;
+  };
+}
+
+async function fetchYahooHistoricalPrices(ticker: string, from: string, to: string): Promise<PriceBar[]> {
+  const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}`);
+  url.searchParams.set("period1", String(toUnixSeconds(from)));
+  url.searchParams.set("period2", String(toUnixSeconds(to)));
+  url.searchParams.set("interval", "1d");
+
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      next: { revalidate: 3600 },
+    });
+    if (!response.ok) return [];
+
+    const data = (await response.json()) as YahooChartResponse;
+    const result = data.chart.result?.[0];
+    if (!result) return [];
+
+    const { timestamp, indicators } = result;
+    const quote = indicators.quote[0];
+
+    const bars: PriceBar[] = timestamp
+      .map((ts, i) => ({
+        date: new Date(ts * 1000).toISOString().slice(0, 10),
+        open: quote.open[i],
+        high: quote.high[i],
+        low: quote.low[i],
+        close: quote.close[i],
+        volume: quote.volume[i],
+      }))
+      // Yahoo includes a null-filled row for the in-progress trading day.
+      .filter(
+        (
+          bar,
+        ): bar is { date: string; open: number; high: number; low: number; close: number; volume: number } =>
+          bar.open != null && bar.high != null && bar.low != null && bar.close != null,
+      )
+      .map((bar) => ({
+        date: bar.date,
+        open: String(bar.open),
+        high: String(bar.high),
+        low: String(bar.low),
+        close: String(bar.close),
+        volume: String(bar.volume ?? 0),
+      }));
+
+    return bars.sort((a, b) => a.date.localeCompare(b.date));
+  } catch {
+    return [];
+  }
+}
+
 export function createFinnhubMarketDataProvider(apiKey: string): MarketDataProvider {
   async function get<T>(path: string, params: Record<string, string>): Promise<T | null> {
     const url = new URL(`${BASE_URL}${path}`);
@@ -148,18 +219,19 @@ export function createFinnhubMarketDataProvider(apiKey: string): MarketDataProvi
         from: String(toUnixSeconds(from)),
         to: String(toUnixSeconds(to)),
       });
-      if (!data || data.s !== "ok") return [];
+      if (data && data.s === "ok") {
+        const bars: PriceBar[] = data.t.map((timestamp, i) => ({
+          date: new Date(timestamp * 1000).toISOString().slice(0, 10),
+          open: String(data.o[i]),
+          high: String(data.h[i]),
+          low: String(data.l[i]),
+          close: String(data.c[i]),
+          volume: String(data.v[i]),
+        }));
+        return bars.sort((a, b) => a.date.localeCompare(b.date));
+      }
 
-      const bars: PriceBar[] = data.t.map((timestamp, i) => ({
-        date: new Date(timestamp * 1000).toISOString().slice(0, 10),
-        open: String(data.o[i]),
-        high: String(data.h[i]),
-        low: String(data.l[i]),
-        close: String(data.c[i]),
-        volume: String(data.v[i]),
-      }));
-
-      return bars.sort((a, b) => a.date.localeCompare(b.date));
+      return fetchYahooHistoricalPrices(ticker, from, to);
     },
 
     async getCorporateActions(ticker: string, from: string, to: string): Promise<CorporateAction[]> {

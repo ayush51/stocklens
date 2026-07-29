@@ -6,6 +6,10 @@ import { requireUser } from "@/lib/auth/session";
 import { prismaService } from "@/lib/db/prisma-service";
 import { AppError } from "@/lib/errors";
 import { recordObservationSchema } from "@/features/company-metrics/validation/observation";
+import {
+  extractKpisForCompany,
+  type ExtractKpisResult,
+} from "@/features/company-metrics/server/extract-kpis";
 
 /**
  * Records (or corrects, via upsert) one reported/manual value for a KPI
@@ -15,11 +19,6 @@ import { recordObservationSchema } from "@/features/company-metrics/validation/o
  * triggered it. requireUser() is the gate ("must be signed in to
  * contribute"), not a workspace-ownership check, since there's no workspace
  * to own here.
- *
- * Always marks isManualOverride: true and confidence: "REPORTED" — there is
- * no automated extraction pipeline yet (see AI-assisted metric proposal,
- * a separate, not-yet-built piece), so every observation today was typed in
- * by a human who should have a real source for it.
  */
 export async function recordMetricObservation(input: unknown): Promise<void> {
   await requireUser();
@@ -55,4 +54,17 @@ export async function recordMetricObservation(input: unknown): Promise<void> {
   });
 
   revalidatePath(`/companies/${ticker}/kpis`);
+}
+
+/** User-triggered only — costs real money against a real API key each time. */
+export async function extractKpisFromFiling(
+  companyId: string,
+  ticker: string,
+): Promise<ExtractKpisResult | null> {
+  await requireUser();
+  const result = await extractKpisForCompany(companyId);
+  if (result) {
+    revalidatePath(`/companies/${ticker}/kpis`);
+  }
+  return result;
 }

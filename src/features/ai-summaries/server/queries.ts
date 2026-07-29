@@ -23,3 +23,17 @@ export async function getCachedFilingSummaries(
   }
   return result;
 }
+
+/** Same read-only cache-check reasoning as getCachedFilingSummaries, keyed by companyId instead. */
+export async function getCachedFinancialsSummary(
+  companyId: string,
+): Promise<{ summary: FilingSummaryContent; model: string } | null> {
+  const row = await prisma.aISummary.findFirst({
+    where: { subjectType: "COMPANY_FINANCIALS", companyId },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!row) return null;
+
+  const parsed = parseFilingSummaryContent(row.content);
+  return parsed ? { summary: parsed, model: row.model } : null;
+}

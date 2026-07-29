@@ -47,6 +47,13 @@ export function KpiList({ template, ticker }: { template: CompanyMetricTemplateS
                   </span>
                   {item.latestObservation.isManualOverride ? (
                     <Badge variant="outline">manually recorded</Badge>
+                  ) : item.latestObservation.confidence === "UNVERIFIED" ? (
+                    <Badge
+                      variant="outline"
+                      title="AI-extracted from the source filing, not yet human-verified"
+                    >
+                      AI-extracted
+                    </Badge>
                   ) : null}
                 </div>
                 {item.history.length > 1 ? (
@@ -59,7 +66,21 @@ export function KpiList({ template, ticker }: { template: CompanyMetricTemplateS
                   </div>
                 ) : null}
                 {item.latestObservation.source ? (
-                  <p className="text-muted-foreground text-xs">Source: {item.latestObservation.source}</p>
+                  <p className="text-muted-foreground text-xs">
+                    Source:{" "}
+                    {item.latestObservation.source.startsWith("http") ? (
+                      <a
+                        href={item.latestObservation.source}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        {item.latestObservation.source}
+                      </a>
+                    ) : (
+                      item.latestObservation.source
+                    )}
+                  </p>
                 ) : null}
               </div>
             ) : (

@@ -1,6 +1,7 @@
 import { getOrResolveCompanyByTicker, normalizeTicker } from "@/features/companies/server/queries";
 import { getMetricTemplateForCompany } from "@/features/company-metrics/server/queries";
 import { KpiList } from "@/features/company-metrics/components/kpi-list";
+import { ExtractKpisButton } from "@/features/company-metrics/components/extract-kpis-button";
 import { EmptyState } from "@/shared/components/empty-state";
 
 export default async function CompanyKpisPage({ params }: { params: Promise<{ ticker: string }> }) {
@@ -20,5 +21,10 @@ export default async function CompanyKpisPage({ params }: { params: Promise<{ ti
     );
   }
 
-  return <KpiList template={template} ticker={ticker} />;
+  return (
+    <div className="space-y-4">
+      <ExtractKpisButton companyId={company.id} ticker={ticker} />
+      <KpiList template={template} ticker={ticker} />
+    </div>
+  );
 }

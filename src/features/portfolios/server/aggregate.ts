@@ -27,6 +27,8 @@ export interface HoldingSummary {
   averageCost: string;
   costBasis: string;
   realizedGainLoss: string;
+  /** Live per-share price — null when no live quote is available for this ticker. */
+  price: string | null;
   /** null when no live quote is available for this ticker. */
   marketValue: string | null;
   unrealizedGainLoss: string | null;
@@ -88,6 +90,7 @@ export function aggregatePortfolio(
     investedCapital = investedCapital.plus(costBasis);
     totalRealizedGainLoss = totalRealizedGainLoss.plus(realizedGainLoss);
 
+    let price: Prisma.Decimal | null = null;
     let marketValue: Prisma.Decimal | null = null;
     let unrealizedGainLoss: Prisma.Decimal | null = null;
     let unrealizedGainLossPct: Prisma.Decimal | null = null;
@@ -96,7 +99,7 @@ export function aggregatePortfolio(
 
     if (quote) {
       hasAnyQuote = true;
-      const price = new Prisma.Decimal(quote.price);
+      price = new Prisma.Decimal(quote.price);
       marketValue = quantity.times(price);
       unrealizedGainLoss = marketValue.minus(costBasis);
       unrealizedGainLossPct = costBasis.greaterThan(0)
@@ -126,6 +129,7 @@ export function aggregatePortfolio(
       realizedGainLoss,
       costBasis,
       quote: quote ?? null,
+      price,
       marketValue,
       unrealizedGainLoss,
       unrealizedGainLossPct,
@@ -149,6 +153,7 @@ export function aggregatePortfolio(
       averageCost: p.averageCost.toString(),
       costBasis: p.costBasis.toString(),
       realizedGainLoss: p.realizedGainLoss.toString(),
+      price: p.price?.toString() ?? null,
       marketValue: p.marketValue?.toString() ?? null,
       unrealizedGainLoss: p.unrealizedGainLoss?.toString() ?? null,
       unrealizedGainLossPct: p.unrealizedGainLossPct?.toString() ?? null,
