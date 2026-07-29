@@ -5,6 +5,8 @@ import { getPortfoliosForUser } from "@/features/portfolios/server/queries";
 import { HoldingsTable } from "@/features/portfolios/components/holdings-table";
 import { PortfolioSummaryCard } from "@/features/portfolios/components/portfolio-summary";
 import { AllocationChart } from "@/features/portfolios/components/allocation-chart";
+import { CreatePortfolioDialog } from "@/features/portfolios/components/create-portfolio-dialog";
+import { AddTransactionDialog } from "@/features/portfolios/components/add-transaction-dialog";
 import { PageHeader } from "@/shared/components/page-header";
 import { EmptyState } from "@/shared/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,27 +18,30 @@ export default async function PortfoliosPage() {
   }
 
   const portfolios = await getPortfoliosForUser(user.id);
-  const hasAnyHoldings = portfolios.some((p) => p.stocks.length > 0 || p.etfs.length > 0);
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Portfolios"
-        description="Holdings synced from your Robinhood account via an MCP-connected chat session — never automatic, never stores your credentials."
+        description="Robinhood holdings come in via an MCP-connected chat session sync — never automatic, never stores your credentials. Other accounts can be tracked by adding a portfolio and entering transactions manually."
+        actions={<CreatePortfolioDialog />}
       />
 
-      {!hasAnyHoldings ? (
+      {portfolios.length === 0 ? (
         <EmptyState
-          title="No holdings yet"
+          title="No portfolios yet"
           description={
-            'Ask Claude, in a session with the robinhood-trading MCP connected, to "sync my portfolio" to pull in your current positions.'
+            'Create one manually above, or ask Claude, in a session with the robinhood-trading MCP connected, to "sync my portfolio" to pull in your current Robinhood positions.'
           }
         />
       ) : (
         portfolios.map((portfolio) => (
           <div key={portfolio.id} className="space-y-6">
             <div className="flex items-baseline justify-between">
-              <h2 className="text-lg font-semibold">{portfolio.name}</h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold">{portfolio.name}</h2>
+                {portfolio.source === "MANUAL" ? <AddTransactionDialog portfolioId={portfolio.id} /> : null}
+              </div>
               {portfolio.lastSyncedAt ? (
                 <p className="text-muted-foreground text-sm">
                   Last synced {portfolio.lastSyncedAt.toLocaleString()}
@@ -44,31 +49,43 @@ export default async function PortfoliosPage() {
               ) : null}
             </div>
 
-            <PortfolioSummaryCard portfolio={portfolio} />
+            {portfolio.stocks.length === 0 && portfolio.etfs.length === 0 ? (
+              <EmptyState
+                title="No transactions yet"
+                description={
+                  portfolio.source === "MANUAL"
+                    ? "Add a transaction above to start tracking this portfolio."
+                    : "Sync your Robinhood positions to populate this portfolio."
+                }
+              />
+            ) : (
+              <>
+                <PortfolioSummaryCard portfolio={portfolio} />
+                <AllocationChart holdings={[...portfolio.stocks, ...portfolio.etfs]} />
 
-            <AllocationChart holdings={[...portfolio.stocks, ...portfolio.etfs]} />
+                {portfolio.stocks.length > 0 ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Stocks</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <HoldingsTable rows={portfolio.stocks} />
+                    </CardContent>
+                  </Card>
+                ) : null}
 
-            {portfolio.stocks.length > 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Stocks</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <HoldingsTable rows={portfolio.stocks} />
-                </CardContent>
-              </Card>
-            ) : null}
-
-            {portfolio.etfs.length > 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>ETFs & funds</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <HoldingsTable rows={portfolio.etfs} />
-                </CardContent>
-              </Card>
-            ) : null}
+                {portfolio.etfs.length > 0 ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>ETFs & funds</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <HoldingsTable rows={portfolio.etfs} />
+                    </CardContent>
+                  </Card>
+                ) : null}
+              </>
+            )}
           </div>
         ))
       )}
