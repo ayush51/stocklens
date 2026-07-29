@@ -81,6 +81,41 @@ describe("computeHoldingAggregate", () => {
     expect(result.averageCost.toString()).toBe("100");
   });
 
+  it("treats DIVIDEND_REINVESTMENT like a BUY", () => {
+    const result = computeHoldingAggregate([
+      { type: "BUY", quantity: "10", price: "100" },
+      { type: "DIVIDEND_REINVESTMENT", quantity: "10", price: "200" },
+    ]);
+
+    expect(result.quantity.toString()).toBe("20");
+    // (10*100 + 10*200) / 20 = 150 — same math as a plain second BUY
+    expect(result.averageCost.toString()).toBe("150");
+  });
+
+  it("treats TRANSFER_IN like a BUY and TRANSFER_OUT like a SELL", () => {
+    const result = computeHoldingAggregate([
+      { type: "TRANSFER_IN", quantity: "10", price: "100" },
+      { type: "TRANSFER_OUT", quantity: "4", price: "150" },
+    ]);
+
+    expect(result.quantity.toString()).toBe("6");
+    expect(result.averageCost.toString()).toBe("100");
+    expect(result.realizedGainLoss.toString()).toBe("200"); // (150-100)*4
+  });
+
+  it("skips cash-only rows with null quantity/price rather than throwing", () => {
+    const result = computeHoldingAggregate([
+      { type: "BUY", quantity: "10", price: "100" },
+      { type: "DEPOSIT", quantity: null, price: null },
+      { type: "FEE", quantity: null, price: null },
+      { type: "WITHDRAWAL", quantity: null, price: null },
+      { type: "INTEREST", quantity: null, price: null },
+    ]);
+
+    expect(result.quantity.toString()).toBe("10");
+    expect(result.averageCost.toString()).toBe("100");
+  });
+
   it("returns zero for an empty transaction history", () => {
     const result = computeHoldingAggregate([]);
 

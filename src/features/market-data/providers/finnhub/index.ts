@@ -8,16 +8,18 @@ import type {
 } from "@/shared/contracts/market-data-provider";
 
 /**
- * UNVERIFIED — implemented against Finnhub's publicly documented REST API
- * shape (https://finnhub.io/docs/api) from training knowledge, but never
- * executed against the live API: no FINNHUB_API_KEY was available in this
- * environment to test with (see src/lib/env.ts). Do not treat this as
- * proven correct. Before relying on it, run it against a real key and
- * confirm each response shape still matches — Finnhub's endpoints and
- * free-tier gating have changed before and may again.
+ * Verified against the live API on 2026-07-29 with a real free-tier key.
+ * Confirmed working: getQuote, getSecurityMetadata, getNextEarningsDate,
+ * and the unknown-ticker-returns-null path.
  *
- * Isolated to this one file precisely so that verification, once possible,
- * is a small, contained diff rather than a hunt through feature code.
+ * getHistoricalPrices and getCorporateActions correctly return an empty
+ * array on the free tier — not a bug: Finnhub's /stock/candle and
+ * /stock/split endpoints respond 403 ("You don't have access to this
+ * resource") without a paid plan, and the `!response.ok` check in get()
+ * below already treats that as "no data" rather than throwing. If a paid
+ * plan is ever added, these should start returning real data with no code
+ * change needed here — re-verify against the live API if that happens,
+ * since the response shape itself is still unconfirmed for these two.
  */
 
 const BASE_URL = "https://finnhub.io/api/v1";

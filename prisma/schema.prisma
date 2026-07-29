@@ -114,24 +114,37 @@ enum TransactionType {
   BUY
   SELL
   DIVIDEND
+  DIVIDEND_REINVESTMENT
+  DEPOSIT
+  WITHDRAWAL
+  FEE
+  INTEREST
   SPLIT
+  TRANSFER_IN
+  TRANSFER_OUT
 }
 
 model Transaction {
-  id          String          @id @default(uuid()) @db.Uuid
-  portfolioId String          @db.Uuid
-  companyId   String          @db.Uuid
-  type        TransactionType
-  quantity    Decimal         @db.Decimal(20, 6)
-  price       Decimal         @db.Decimal(20, 4)
-  fees        Decimal?        @db.Decimal(20, 4)
-  occurredAt  DateTime
-  source      PortfolioSource @default(MANUAL)
-  externalId  String? // broker/CSV-provided id, for idempotent re-sync/re-import
-  createdAt   DateTime        @default(now())
+  id             String          @id @default(uuid()) @db.Uuid
+  portfolioId    String          @db.Uuid
+  companyId      String?         @db.Uuid // null for cash-only rows (deposit/withdrawal/fee/interest)
+  csvImportJobId String?         @db.Uuid
+  type           TransactionType
+  // quantity/price are null for cash-only rows — use `amount` instead.
+  quantity       Decimal?        @db.Decimal(20, 6)
+  price          Decimal?        @db.Decimal(20, 4)
+  // Cash amount — the authoritative value for cash-only rows, and an
+  // optional cross-check (should equal quantity*price+fees) for share rows.
+  amount         Decimal?        @db.Decimal(20, 4)
+  fees           Decimal?        @db.Decimal(20, 4)
+  occurredAt     DateTime
+  source         PortfolioSource @default(MANUAL)
+  externalId     String? // broker/CSV-provided id, or a deterministic hash of row content for CSV imports — for idempotent re-sync/re-import
+  createdAt      DateTime        @default(now())
 
-  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  company   Company   @relation(fields: [companyId], references: [id])
+  portfolio    Portfolio     @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  company      Company?      @relation(fields: [companyId], references: [id])
+  csvImportJob CsvImportJob? @relation(fields: [csvImportJobId], references: [id])
 
   @@unique([portfolioId, externalId])
   @@index([portfolioId, occurredAt])
@@ -173,16 +186,27 @@ model CsvImportJob {
   id            String          @id @default(uuid()) @db.Uuid
   portfolioId   String          @db.Uuid
   status        CsvImportStatus @default(PENDING)
-  storagePath   String // Supabase Storage object path
+  filename      String
+  // SHA-256 of the uploaded file — proves re-import detection and gives an
+  // audit trail without storing the file itself (spec: "store the source
+  // filename and import checksum, not the raw file unless retention is
+  // explicitly enabled"). The raw file is parsed entirely client-side and
+  // never uploaded to the server at all.
+  checksum      String
+  // Reserved for a future explicit-retention opt-in — unused today.
+  storagePath   String?
   columnMapping Json
   rowsTotal     Int?
   rowsSucceeded Int?
+  rowsDuplicate Int?
   rowsFailed    Int?
   errorDetail   Json?
   createdAt     DateTime        @default(now())
   completedAt   DateTime?
+  rolledBackAt  DateTime?
 
-  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  portfolio    Portfolio     @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
 
   @@index([portfolioId])
 }
