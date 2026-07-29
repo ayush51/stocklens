@@ -1,6 +1,7 @@
 import { getOrResolveCompanyByTicker, normalizeTicker } from "@/features/companies/server/queries";
 import { getFilingsForCompany } from "@/features/filings/server/queries";
 import { FilingsList } from "@/features/filings/components/filings-list";
+import { getCachedFilingSummaries } from "@/features/ai-summaries/server/queries";
 import { EmptyState } from "@/shared/components/empty-state";
 
 export default async function CompanyFilingsPage({ params }: { params: Promise<{ ticker: string }> }) {
@@ -20,5 +21,7 @@ export default async function CompanyFilingsPage({ params }: { params: Promise<{
     );
   }
 
-  return <FilingsList filings={filings} />;
+  const summaries = await getCachedFilingSummaries(filings.map((f) => f.id));
+
+  return <FilingsList filings={filings} summaries={summaries} />;
 }

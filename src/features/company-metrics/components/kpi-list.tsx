@@ -7,6 +7,16 @@ import { formatMetricValue as formatValue } from "@/features/company-metrics/lib
 export function KpiList({ template, ticker }: { template: CompanyMetricTemplateSummary; ticker: string }) {
   return (
     <div className="space-y-4">
+      {template.source === "AI_PROPOSED" ? (
+        <div className="border-border bg-muted/50 rounded-lg border p-3 text-sm">
+          <span className="font-medium">AI-proposed template.</span>{" "}
+          <span className="text-muted-foreground">
+            The metric list and &quot;why it matters&quot; notes are general knowledge of how this company
+            reports, not verified against a specific filing. Treat as a starting point — confirm against the
+            real 10-Q/10-K before relying on it, and every value below still requires a real, cited source.
+          </span>
+        </div>
+      ) : null}
       {template.items.map((item) => (
         <Card key={item.id}>
           <CardHeader>

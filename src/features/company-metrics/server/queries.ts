@@ -26,6 +26,7 @@ export interface MetricTemplateItemSummary {
 export interface CompanyMetricTemplateSummary {
   id: string;
   name: string;
+  source: string;
   items: MetricTemplateItemSummary[];
 }
 
@@ -49,10 +50,9 @@ function toSummary(observation: {
  * company_metric_templates migration) — the default RLS-scoped `prisma`
  * client reads them fine with no user claim needed, same as Company itself.
  *
- * Returns null when the company has no template yet (most companies won't
- * — only the curated ORCL/META/NVDA examples exist today; see
- * prisma/seed-metric-templates.ts). That's a normal "nothing to show" case,
- * not an error.
+ * Returns null when the company has no template yet — see
+ * prisma/seed-metric-templates.ts for current coverage. That's a normal
+ * "nothing to show" case, not an error.
  */
 export async function getMetricTemplateForCompany(
   companyId: string,
@@ -78,6 +78,7 @@ export async function getMetricTemplateForCompany(
   return {
     id: template.id,
     name: template.name,
+    source: template.source,
     items: template.items.map((item) => {
       const history = item.observations.map(toSummary);
       return {

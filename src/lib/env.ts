@@ -37,6 +37,13 @@ const envSchema = z.object({
   // to the fail-closed UnavailableMarketDataProvider rather than crashing
   // the app. Get a free-tier key at https://finnhub.io/register.
   FINNHUB_API_KEY: z.string().min(1).optional(),
+
+  // AI-generated filing/financial summaries — see
+  // src/shared/contracts/ai-summary-provider.ts. Optional: absent means
+  // src/features/ai-summaries/server/get-provider.ts falls back to a
+  // fail-closed unavailable provider. Get a free-tier key at
+  // https://aistudio.google.com/apikey.
+  GEMINI_API_KEY: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

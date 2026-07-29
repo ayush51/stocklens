@@ -3,15 +3,21 @@ import "dotenv/config"; // standalone entry point — Next.js loads .env itself,
 import { prismaService as prisma } from "@/lib/db/prisma-service";
 
 /**
- * Curated company-specific KPI templates — real reference content (like
- * Company rows), not throwaway demo data, so this is a separate one-off
- * loader rather than part of prisma/seed.ts's synthetic dev fixtures.
- * Idempotent (upserts throughout): safe to re-run after editing the lists
- * below to add/adjust metrics.
+ * Company-specific KPI templates — real reference content (like Company
+ * rows), not throwaway demo data, so this is a separate one-off loader
+ * rather than part of prisma/seed.ts's synthetic dev fixtures. Idempotent
+ * (upserts throughout): safe to re-run after editing the lists below to
+ * add/adjust metrics.
  *
- * The three example companies from docs' Phase 0 re-scope (ORCL/META/NVDA)
- * are also real positions in the seeded user's portfolio, so this is
- * immediately visible on already-held companies, not hypothetical.
+ * source: AI_PROPOSED on every template here — these are my own reasoning
+ * about how each company typically reports (general knowledge), not
+ * verified line-by-line against a specific filing I just read. Treat
+ * "why it matters"/"reported in" as a well-informed starting point to
+ * confirm against the real filing, not a citation.
+ *
+ * Prioritized by real portfolio allocation: ORCL/META/NVDA/MSFT/PLTR are
+ * the five largest real holdings (covering ~57% of invested capital as of
+ * 2026-07-29), not arbitrary examples.
  */
 
 interface MetricSpec {
@@ -375,6 +381,134 @@ const TEMPLATES: Record<string, { name: string; items: TemplateItemSpec[] }> = {
       },
     ],
   },
+  MSFT: {
+    name: "Microsoft KPI template",
+    items: [
+      {
+        metric: {
+          key: "azure_revenue_growth",
+          label: "Azure and other cloud services revenue growth",
+          description: "Constant-currency growth rate Microsoft discloses for Azure specifically.",
+          unit: "PERCENT",
+        },
+        whyItMatters:
+          "The single most-watched number in every Microsoft earnings report — the cloud/AI growth engine.",
+        reportedIn:
+          "Earnings release, earnings call (Microsoft doesn't disclose absolute Azure revenue, only growth %)",
+      },
+      {
+        metric: {
+          key: "intelligent_cloud_revenue",
+          label: "Intelligent Cloud segment revenue",
+          description:
+            "Revenue for the segment containing Azure, SQL Server, Windows Server, and enterprise services.",
+          unit: "USD",
+        },
+        whyItMatters:
+          "The broader cloud/infrastructure segment Azure sits inside — context for the growth-rate headline.",
+        reportedIn: "10-Q / 10-K segment disclosures",
+      },
+      {
+        metric: {
+          key: "commercial_rpo",
+          label: "Commercial Remaining Performance Obligations",
+          description: "Contracted commercial revenue not yet recognized.",
+          unit: "USD",
+        },
+        whyItMatters:
+          "A leading indicator of future Azure/365 revenue — bookings ahead of recognition, same logic as Oracle's RPO.",
+        reportedIn: "10-Q / 10-K, earnings call",
+      },
+      {
+        metric: {
+          key: "m365_copilot_commentary",
+          label: "Microsoft 365 Copilot adoption commentary",
+          description: "Qualitative management disclosure on Copilot seat/customer adoption.",
+          unit: "TEXT",
+        },
+        whyItMatters:
+          "Microsoft's primary AI-monetization thesis outside Azure — currently disclosed qualitatively, not as a hard number.",
+        reportedIn: "Earnings call transcript",
+      },
+      {
+        metric: SHARED_METRICS.capex,
+        whyItMatters:
+          "AI/data-center infrastructure spend is the dominant driver of Microsoft's capex and near-term FCF trajectory.",
+        reportedIn: "10-Q / 10-K cash flow statement, earnings call",
+      },
+      {
+        metric: SHARED_METRICS.fcf,
+        whyItMatters: "Whether the AI capex buildout is being funded sustainably out of operating cash flow.",
+        reportedIn: "10-Q / 10-K cash flow statement",
+      },
+    ],
+  },
+  PLTR: {
+    name: "Palantir KPI template",
+    items: [
+      {
+        metric: {
+          key: "us_commercial_revenue_growth",
+          label: "US commercial revenue growth",
+          description: "Year-over-year growth in US commercial (non-government) revenue.",
+          unit: "PERCENT",
+        },
+        whyItMatters:
+          "The segment the market re-rated Palantir around — proof AIP/Foundry works outside government contracts.",
+        reportedIn: "Earnings release, earnings call",
+      },
+      {
+        metric: {
+          key: "government_revenue_growth",
+          label: "Government revenue growth",
+          description: "Year-over-year growth in US and international government revenue.",
+          unit: "PERCENT",
+        },
+        whyItMatters:
+          "The original, still-largest revenue base — a check on how dependent growth still is on government contracts.",
+        reportedIn: "Earnings release, earnings call",
+      },
+      {
+        metric: {
+          key: "customer_count_growth",
+          label: "Customer count growth",
+          description: "Year-over-year growth in total customer count.",
+          unit: "PERCENT",
+        },
+        whyItMatters:
+          "Land-and-expand is core to the business model — new-logo growth signals whether AIP is winning new customers, not just expanding existing ones.",
+        reportedIn: "Earnings release",
+      },
+      {
+        metric: {
+          key: "net_dollar_retention",
+          label: "Net dollar retention",
+          description: "Revenue retained and expanded from existing customers over the trailing period.",
+          unit: "PERCENT",
+        },
+        whyItMatters:
+          'Measures the "expand" half of land-and-expand — existing customers spending more over time.',
+        reportedIn: "Earnings release",
+      },
+      {
+        metric: {
+          key: "rule_of_40",
+          label: "Rule of 40 (revenue growth % + margin %)",
+          description:
+            "Common software-company health check: revenue growth rate plus profit margin should exceed 40%.",
+          unit: "PERCENT",
+        },
+        whyItMatters:
+          "A single number balancing growth against profitability — relevant since Palantir markets itself as both high-growth and profitable, unlike most software peers at this growth stage.",
+        reportedIn: "Derived — not directly disclosed; computed from reported revenue growth and margin",
+      },
+      {
+        metric: SHARED_METRICS.customerConcentration,
+        whyItMatters: "Large individual government contracts can still swing quarterly revenue meaningfully.",
+        reportedIn: "10-K risk factors",
+      },
+    ],
+  },
 };
 
 async function main() {
@@ -387,8 +521,8 @@ async function main() {
 
     const companyTemplate = await prisma.companyMetricTemplate.upsert({
       where: { companyId: company.id },
-      update: { name: template.name },
-      create: { companyId: company.id, name: template.name, source: "CURATED" },
+      update: { name: template.name, source: "AI_PROPOSED" },
+      create: { companyId: company.id, name: template.name, source: "AI_PROPOSED" },
     });
 
     let displayOrder = 0;
