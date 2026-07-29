@@ -63,6 +63,14 @@ export interface NewsImpactRequest {
   promptVersion: string;
 }
 
+export interface TemplateProposalRequest {
+  ticker: string;
+  companyName: string;
+  sector: string | null;
+  industry: string | null;
+  promptVersion: string;
+}
+
 export interface AISummaryProvider {
   summarize(request: AISummaryRequest): Promise<AISummaryResult>;
   /**
@@ -97,4 +105,13 @@ export interface AISummaryProvider {
    * news/lib/news-impact-schema.ts.
    */
   classifyNewsImpact(request: NewsImpactRequest): Promise<AISummaryResult>;
+  /**
+   * Proposes which company-specific KPIs are typically worth tracking for
+   * a company, based on general knowledge of the company/industry — NOT
+   * grounded in a specific filing (see company-metrics'
+   * MetricTemplateSource.AI_PROPOSED and its existing UI disclosure).
+   * result.content is a JSON string encoding TemplateProposalContent —
+   * see company-metrics/lib/template-proposal-schema.ts.
+   */
+  proposeMetricTemplate(request: TemplateProposalRequest): Promise<AISummaryResult>;
 }

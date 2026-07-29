@@ -10,6 +10,7 @@ import type {
   ChatRequest,
   ThesisDraftRequest,
   NewsImpactRequest,
+  TemplateProposalRequest,
 } from "@/shared/contracts/ai-summary-provider";
 
 /**
@@ -110,6 +111,24 @@ const NEWS_IMPACT_SYSTEM_INSTRUCTION = `You are a triage assistant helping an in
 6. "isLikelyNewInformation" should be true/false only if the snippet gives a clear basis for that judgment, otherwise null.
 7. Respond with ONLY a raw JSON object — no markdown code fences, no commentary before or after — matching exactly this shape:
 {"relevance": string, "reasoning": string, "isLikelyNewInformation": boolean | null}`;
+
+/**
+ * See company-metrics/lib/template-proposal-schema.ts for the output
+ * shape. Unlike every other method here, this is deliberately NOT grounded
+ * in fetched document content — it's the model's general knowledge of how
+ * a company/industry typically reports, which is exactly what
+ * MetricTemplateSource.AI_PROPOSED already means and discloses in the UI
+ * (kpi-list.tsx's existing banner). Proposing metric *names worth
+ * tracking* is a fundamentally different, lower-stakes task than asserting
+ * a specific reported *value* (extractMetrics, above, which IS grounded).
+ */
+const TEMPLATE_PROPOSAL_SYSTEM_INSTRUCTION = `You are helping propose a starting-point list of company-specific KPIs worth tracking for an investment research tool. Follow these rules without exception:
+
+1. Propose 4-8 metrics that are genuinely specific to this company or its industry — not generic metrics like "revenue" or "net income" that already come from standard financial statements elsewhere in this tool. Think: what does an analyst covering this specific company or sector actually watch for that a generic income statement wouldn't show?
+2. For each metric, give a short lowercase snake_case keySlug (e.g. "cloud_revenue_growth"), a human label, a one-sentence description, a unit ("USD", "PERCENT", "COUNT", or "TEXT"), a whyItMatters note explaining why this matters for this specific company, and reportedIn noting where it's typically disclosed (e.g. "10-Q MD&A", "quarterly earnings deck").
+3. This is proposed general knowledge, not verified against a specific filing you've read — do not claim a specific numeric value exists or state what the company's actual current figure is.
+4. Respond with ONLY a raw JSON object — no markdown code fences, no commentary before or after — matching exactly this shape:
+{"metrics": [{"keySlug": string, "label": string, "description": string, "unit": string, "whyItMatters": string, "reportedIn": string}]}`;
 
 const MODEL = "gemini-2.5-flash";
 
@@ -229,6 +248,26 @@ export function createGeminiAISummaryProvider(apiKey: string): AISummaryProvider
           contents: `Classify this news item about ${request.companyName} (${request.ticker}).${thesisBlock}\n\n<untrusted_content>\nHeadline: ${request.headline}\nSummary: ${request.summary}\n</untrusted_content>`,
           config: {
             systemInstruction: NEWS_IMPACT_SYSTEM_INSTRUCTION,
+            responseMimeType: "application/json",
+          },
+        }),
+      );
+
+      return { content: text, model: MODEL, promptVersion: request.promptVersion };
+    },
+
+    async proposeMetricTemplate(request: TemplateProposalRequest): Promise<AISummaryResult> {
+      const industryLine =
+        request.sector || request.industry
+          ? ` It operates in the ${[request.sector, request.industry].filter(Boolean).join(" / ")} sector/industry.`
+          : "";
+
+      const text = await callGemini("proposeMetricTemplate", () =>
+        client.models.generateContent({
+          model: MODEL,
+          contents: `Propose company-specific KPIs worth tracking for ${request.companyName} (${request.ticker}).${industryLine}`,
+          config: {
+            systemInstruction: TEMPLATE_PROPOSAL_SYSTEM_INSTRUCTION,
             responseMimeType: "application/json",
           },
         }),

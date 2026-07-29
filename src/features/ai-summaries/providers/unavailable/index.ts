@@ -40,4 +40,10 @@ export const unavailableAISummaryProvider: AISummaryProvider = {
       "AI news impact classification isn't configured yet — GEMINI_API_KEY is not set.",
     );
   },
+  async proposeMetricTemplate() {
+    throw new AppError(
+      "UPSTREAM_UNAVAILABLE",
+      "AI KPI template proposal isn't configured yet — GEMINI_API_KEY is not set.",
+    );
+  },
 };

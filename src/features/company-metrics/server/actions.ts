@@ -10,6 +10,10 @@ import {
   extractKpisForCompany,
   type ExtractKpisResult,
 } from "@/features/company-metrics/server/extract-kpis";
+import {
+  proposeAndSaveMetricTemplate,
+  type ProposeTemplateResult,
+} from "@/features/company-metrics/server/propose-template";
 
 /**
  * Records (or corrects, via upsert) one reported/manual value for a KPI
@@ -66,5 +70,19 @@ export async function extractKpisFromFiling(
   if (result) {
     revalidatePath(`/companies/${ticker}/kpis`);
   }
+  return result;
+}
+
+/** User-triggered only — costs real money against a real API key. */
+export async function proposeKpiTemplate(
+  companyId: string,
+  ticker: string,
+  companyName: string,
+  sector: string | null,
+  industry: string | null,
+): Promise<ProposeTemplateResult> {
+  await requireUser();
+  const result = await proposeAndSaveMetricTemplate(companyId, ticker, companyName, sector, industry);
+  revalidatePath(`/companies/${ticker}/kpis`);
   return result;
 }
