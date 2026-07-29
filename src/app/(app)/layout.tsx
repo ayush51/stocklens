@@ -7,12 +7,13 @@ import { signOut } from "@/lib/auth/actions";
 import { WorkspaceProvider } from "@/shared/hooks/use-workspace";
 import { CompanySearchBox } from "@/features/companies/components/company-search-box";
 import { ChatWidget } from "@/features/assistant/components/chat-widget";
+import { DisclaimerFooter } from "@/shared/components/disclaimer-footer";
 import { Button } from "@/components/ui/button";
 
 // Phase 2 features land under these paths (docs/phase-0/06-routes.md); the
-// shell links to them now so the nav structure is visible, even though not
-// every item is a real page yet (Theses/Alerts remain placeholders — thesis
-// itself lives per-company under /companies/[ticker]/thesis).
+// shell links to them now so the nav structure is visible. /alerts is still
+// a real "not built yet" page (see src/features/alerts/README.md) —
+// everything else here is a fully implemented route.
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/portfolios", label: "Portfolios" },
@@ -65,6 +66,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </div>
           </header>
           <main className="flex-1 px-6 py-8">{children}</main>
+          <DisclaimerFooter />
         </div>
       </div>
       <ChatWidget />
