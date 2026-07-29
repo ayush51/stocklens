@@ -197,6 +197,45 @@ describe("aggregatePortfolio", () => {
     expect(result.totalRealizedGainLoss).toBe("250");
   });
 
+  it("defaults realizedGainLossTracked to true and isRealizedGainLossPartial to false when unspecified", () => {
+    const holdings: HoldingInput[] = [
+      {
+        companyId: "a",
+        ticker: "AAA",
+        name: "A Co",
+        assetType: "STOCK",
+        quantity: "10",
+        averageCost: "100",
+        realizedGainLoss: "0",
+      },
+    ];
+
+    const result = aggregatePortfolio(holdings, new Map(), now);
+
+    expect(result.isRealizedGainLossPartial).toBe(false);
+    expect(result.holdings[0].realizedGainLossTracked).toBe(true);
+  });
+
+  it("flags isRealizedGainLossPartial when a holding has no transaction history behind its realizedGainLoss", () => {
+    const holdings: HoldingInput[] = [
+      {
+        companyId: "a",
+        ticker: "AAA",
+        name: "A Co",
+        assetType: "STOCK",
+        quantity: "10",
+        averageCost: "100",
+        realizedGainLoss: "0",
+        realizedGainLossTracked: false,
+      },
+    ];
+
+    const result = aggregatePortfolio(holdings, new Map(), now);
+
+    expect(result.isRealizedGainLossPartial).toBe(true);
+    expect(result.holdings[0].realizedGainLossTracked).toBe(false);
+  });
+
   it("carries the isStale flag from the quote's market timestamp", () => {
     const holdings: HoldingInput[] = [
       {

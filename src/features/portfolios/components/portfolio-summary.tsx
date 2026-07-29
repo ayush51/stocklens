@@ -3,10 +3,27 @@ import { Badge } from "@/components/ui/badge";
 import type { PortfolioSummary } from "@/features/portfolios/server/queries";
 import { formatMoney, formatPercent, gainLossClassName } from "@/features/portfolios/lib/format";
 
-function Stat({ label, value, valueClassName }: { label: string; value: string; valueClassName?: string }) {
+function Stat({
+  label,
+  value,
+  valueClassName,
+  badge,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+  badge?: { text: string; title: string };
+}) {
   return (
     <div>
-      <p className="text-muted-foreground text-xs">{label}</p>
+      <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+        {label}
+        {badge ? (
+          <Badge variant="outline" title={badge.title} className="px-1 py-0 text-[10px]">
+            {badge.text}
+          </Badge>
+        ) : null}
+      </p>
       <p className={`text-lg font-semibold tabular-nums ${valueClassName ?? ""}`}>{value}</p>
     </div>
   );
@@ -52,6 +69,15 @@ export function PortfolioSummaryCard({ portfolio }: { portfolio: PortfolioSummar
           label="Realized G/L"
           value={formatMoney(portfolio.totalRealizedGainLoss)}
           valueClassName={gainLossClassName(portfolio.totalRealizedGainLoss)}
+          badge={
+            portfolio.isRealizedGainLossPartial
+              ? {
+                  text: "incomplete",
+                  title:
+                    "Some holdings have no transaction history recorded (e.g. positions synced directly from Robinhood, which reports current holdings but not the trade history behind them) — this figure only reflects what's actually tracked, not a confirmed $0 for those positions.",
+                }
+              : undefined
+          }
         />
       </CardContent>
       {portfolio.concentrationWarnings.length > 0 ? (

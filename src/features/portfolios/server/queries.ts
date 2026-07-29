@@ -15,6 +15,7 @@ export interface PortfolioSummary {
   totalUnrealizedGainLossPct: string | null;
   totalDailyGainLoss: string | null;
   totalRealizedGainLoss: string;
+  isRealizedGainLossPartial: boolean;
   largestPositions: HoldingSummary[];
   concentrationWarnings: HoldingSummary[];
   stocks: HoldingSummary[];
@@ -57,7 +58,27 @@ export async function getPortfoliosForUser(userId: string): Promise<PortfolioSum
     quoteEntries.filter((entry): entry is [string, Quote] => entry[1] !== null),
   );
 
+  // realizedGainLoss is only a real derived figure for holdings with actual
+  // Transaction rows behind them (see recomputeHolding) — a Robinhood MCP
+  // snapshot sync writes quantity/averageCost directly and never creates
+  // any Transaction, leaving the schema default (0) in place forever. One
+  // query per portfolio for which companyIds have transaction history,
+  // rather than N+1 per holding.
+  const transactedCompanyIdsByPortfolio = new Map<string, Set<string>>();
+  for (const portfolio of portfolios) {
+    const rows = await prisma.transaction.findMany({
+      where: { portfolioId: portfolio.id, companyId: { not: null } },
+      distinct: ["companyId"],
+      select: { companyId: true },
+    });
+    transactedCompanyIdsByPortfolio.set(
+      portfolio.id,
+      new Set(rows.map((r) => r.companyId).filter((id): id is string => id !== null)),
+    );
+  }
+
   return portfolios.map((portfolio) => {
+    const transactedCompanyIds = transactedCompanyIdsByPortfolio.get(portfolio.id) ?? new Set();
     const holdingInputs: HoldingInput[] = portfolio.holdings.map((holding) => ({
       companyId: holding.companyId,
       ticker: holding.company.ticker,
@@ -66,6 +87,7 @@ export async function getPortfoliosForUser(userId: string): Promise<PortfolioSum
       quantity: holding.quantity,
       averageCost: holding.averageCost,
       realizedGainLoss: holding.realizedGainLoss,
+      realizedGainLossTracked: transactedCompanyIds.has(holding.companyId),
     }));
 
     const aggregate = aggregatePortfolio(holdingInputs, quotes);
@@ -88,6 +110,7 @@ export async function getPortfoliosForUser(userId: string): Promise<PortfolioSum
       totalUnrealizedGainLossPct: aggregate.totalUnrealizedGainLossPct,
       totalDailyGainLoss: aggregate.totalDailyGainLoss,
       totalRealizedGainLoss: aggregate.totalRealizedGainLoss,
+      isRealizedGainLossPartial: aggregate.isRealizedGainLossPartial,
       largestPositions: aggregate.largestPositions,
       concentrationWarnings: aggregate.concentrationWarnings,
       stocks,

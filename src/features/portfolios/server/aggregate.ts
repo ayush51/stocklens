@@ -16,6 +16,17 @@ export interface HoldingInput {
   quantity: Prisma.Decimal | string;
   averageCost: Prisma.Decimal | string;
   realizedGainLoss: Prisma.Decimal | string;
+  /**
+   * False when this holding has no backing Transaction rows to have derived
+   * realizedGainLoss from (e.g. a Robinhood MCP snapshot sync, which writes
+   * quantity/averageCost directly from the brokerage's own report and never
+   * creates Transaction rows — see brokerage-sync/server/ingest.ts). In that
+   * case the stored value is the schema default (0), not a real computed
+   * figure, and must not be shown as if it were. Defaults to true so
+   * existing synthetic test fixtures (which really do represent known,
+   * computed values) don't need updating.
+   */
+  realizedGainLossTracked?: boolean;
 }
 
 export interface HoldingSummary {
@@ -27,6 +38,8 @@ export interface HoldingSummary {
   averageCost: string;
   costBasis: string;
   realizedGainLoss: string;
+  /** False when realizedGainLoss is the schema default, not a real derived figure — see HoldingInput.realizedGainLossTracked. */
+  realizedGainLossTracked: boolean;
   /** Live per-share price — null when no live quote is available for this ticker. */
   price: string | null;
   /** null when no live quote is available for this ticker. */
@@ -52,6 +65,8 @@ export interface PortfolioAggregate {
   totalUnrealizedGainLossPct: string | null;
   totalDailyGainLoss: string | null;
   totalRealizedGainLoss: string;
+  /** True if any holding's realizedGainLoss isn't actually tracked — the total is a mix of real and untracked-as-zero figures. */
+  isRealizedGainLossPartial: boolean;
   holdings: HoldingSummary[];
   largestPositions: HoldingSummary[];
   concentrationWarnings: HoldingSummary[];
@@ -78,6 +93,7 @@ export function aggregatePortfolio(
   let totalDailyGainLoss = new Prisma.Decimal(0);
   let totalRealizedGainLoss = new Prisma.Decimal(0);
   let isPartial = false;
+  let isRealizedGainLossPartial = false;
   let hasAnyQuote = false;
 
   const provisional = holdings.map((holding) => {
@@ -89,6 +105,7 @@ export function aggregatePortfolio(
 
     investedCapital = investedCapital.plus(costBasis);
     totalRealizedGainLoss = totalRealizedGainLoss.plus(realizedGainLoss);
+    if (holding.realizedGainLossTracked === false) isRealizedGainLossPartial = true;
 
     let price: Prisma.Decimal | null = null;
     let marketValue: Prisma.Decimal | null = null;
@@ -153,6 +170,7 @@ export function aggregatePortfolio(
       averageCost: p.averageCost.toString(),
       costBasis: p.costBasis.toString(),
       realizedGainLoss: p.realizedGainLoss.toString(),
+      realizedGainLossTracked: p.holding.realizedGainLossTracked ?? true,
       price: p.price?.toString() ?? null,
       marketValue: p.marketValue?.toString() ?? null,
       unrealizedGainLoss: p.unrealizedGainLoss?.toString() ?? null,
@@ -183,6 +201,7 @@ export function aggregatePortfolio(
         : null,
     totalDailyGainLoss: hasAnyQuote ? totalDailyGainLoss.toString() : null,
     totalRealizedGainLoss: totalRealizedGainLoss.toString(),
+    isRealizedGainLossPartial,
     holdings: holdingSummaries,
     largestPositions,
     concentrationWarnings,
