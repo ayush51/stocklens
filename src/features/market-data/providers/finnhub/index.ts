@@ -2,6 +2,7 @@ import { logger } from "@/lib/logger";
 import type {
   AnalystRecommendation,
   CorporateAction,
+  EarningsCalendarEntry,
   EarningsDate,
   FundamentalRatios,
   MarketDataProvider,
@@ -71,6 +72,12 @@ interface FinnhubEarningsCalendarEntry {
   symbol: string;
   date: string; // YYYY-MM-DD
   epsEstimate: number | null;
+  epsActual: number | null;
+  revenueEstimate: number | null;
+  revenueActual: number | null;
+  quarter: number; // 1-4
+  year: number;
+  hour: "bmo" | "amc" | "dmh" | "" | null;
 }
 
 interface FinnhubEarningsCalendarResponse {
@@ -192,6 +199,33 @@ export function createFinnhubMarketDataProvider(
   options: { yahooHistoricalsFallbackEnabled?: boolean } = {},
 ): MarketDataProvider {
   const yahooHistoricalsFallbackEnabled = options.yahooHistoricalsFallbackEnabled ?? true;
+
+  // Verified live (2026-07-29): bursts of concurrent requests against
+  // Finnhub's free tier 429 a meaningful fraction of them — retry-with-
+  // backoff alone still let some /quote calls exhaust all retries and fail
+  // outright. A page with 36 holdings (a real portfolio in this app) fires
+  // 36 quote requests on every load, so this isn't an edge case. Every
+  // request dispatched through this provider instance is serialized
+  // through one queue with a minimum spacing between requests — this
+  // controls the actual dispatch rate globally, not just per-caller
+  // concurrency, which is what retry-with-backoff alone couldn't fix.
+  const MIN_REQUEST_SPACING_MS = 150; // ~6-7/sec sustained, well under Finnhub's documented 60/min
+  const MAX_RETRIES = 4;
+  const BASE_DELAY_MS = 500;
+  let dispatchQueue: Promise<void> = Promise.resolve();
+
+  function scheduleDispatch(): Promise<void> {
+    const previous = dispatchQueue;
+    let release!: () => void;
+    dispatchQueue = new Promise((resolve) => {
+      release = resolve;
+    });
+    return previous.then(async () => {
+      await new Promise((resolve) => setTimeout(resolve, MIN_REQUEST_SPACING_MS));
+      release();
+    });
+  }
+
   async function get<T>(path: string, params: Record<string, string>): Promise<T | null> {
     const url = new URL(`${BASE_URL}${path}`);
     for (const [key, value] of Object.entries(params)) {
@@ -199,12 +233,26 @@ export function createFinnhubMarketDataProvider(
     }
     url.searchParams.set("token", apiKey);
 
-    const response = await fetch(url, { next: { revalidate: 60 } });
-    if (!response.ok) {
-      logger.warn("finnhub_request_failed", { path, status: response.status });
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      await scheduleDispatch();
+      const response = await fetch(url, { next: { revalidate: 60 } });
+
+      if (response.ok) {
+        return (await response.json()) as T;
+      }
+
+      if (response.status === 429 && attempt < MAX_RETRIES) {
+        const delayMs = BASE_DELAY_MS * 2 ** attempt;
+        logger.warn("finnhub_rate_limited_retrying", { path, attempt: attempt + 1, delayMs });
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue;
+      }
+
+      logger.warn("finnhub_request_failed", { path, status: response.status, attempt });
       return null;
     }
-    return (await response.json()) as T;
+
+    return null;
   }
 
   return {
@@ -296,6 +344,34 @@ export function createFinnhubMarketDataProvider(
       if (!next) return null;
 
       return { ticker, date: next.date, isEstimate: true };
+    },
+
+    async getEarningsCalendar(ticker: string, from: string, to: string): Promise<EarningsCalendarEntry[]> {
+      const data = await get<FinnhubEarningsCalendarResponse>("/calendar/earnings", {
+        symbol: ticker,
+        from,
+        to,
+      });
+      if (!data) return [];
+
+      const timingByHour: Record<string, EarningsCalendarEntry["timing"]> = {
+        bmo: "BEFORE_MARKET",
+        amc: "AFTER_MARKET",
+        dmh: "DURING_MARKET",
+      };
+
+      return data.earningsCalendar
+        .filter((entry) => entry.quarter >= 1 && entry.quarter <= 4)
+        .map((entry) => ({
+          ticker,
+          fiscalYear: entry.year,
+          fiscalPeriod: `Q${entry.quarter}` as EarningsCalendarEntry["fiscalPeriod"],
+          reportDate: entry.date,
+          timing: entry.hour ? (timingByHour[entry.hour] ?? null) : null,
+          epsEstimate: entry.epsEstimate !== null ? String(entry.epsEstimate) : null,
+          revenueEstimate: entry.revenueEstimate !== null ? String(entry.revenueEstimate) : null,
+        }))
+        .sort((a, b) => a.reportDate.localeCompare(b.reportDate));
     },
 
     async getCompanyNews(ticker: string, from: string, to: string): Promise<NewsItem[]> {

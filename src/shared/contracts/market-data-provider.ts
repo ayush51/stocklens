@@ -55,6 +55,27 @@ export interface EarningsDate {
   isEstimate: boolean;
 }
 
+/**
+ * A single scheduled earnings report, with consensus estimates.
+ * epsActual/revenueActual are deliberately NOT part of this shape — verified
+ * live against Finnhub's real API (2026-07-29) that its free-tier
+ * /calendar/earnings endpoint only returns upcoming reports with estimates,
+ * never past reports with actuals (a date-range query entirely in the past
+ * returns an empty array, not historical rows). Actual reported figures
+ * come from FinancialStatement (real SEC EDGAR XBRL data) once filed,
+ * joined by fiscalYear/fiscalPeriod — see earnings/server/queries.ts.
+ */
+export interface EarningsCalendarEntry {
+  ticker: string;
+  fiscalYear: number;
+  fiscalPeriod: "Q1" | "Q2" | "Q3" | "Q4";
+  reportDate: string; // YYYY-MM-DD
+  /** When in the trading day the report is expected — null when the provider doesn't say. */
+  timing: "BEFORE_MARKET" | "AFTER_MARKET" | "DURING_MARKET" | null;
+  epsEstimate: string | null;
+  revenueEstimate: string | null;
+}
+
 export interface NewsItem {
   id: string;
   ticker: string;
@@ -103,6 +124,8 @@ export interface MarketDataProvider {
   getCorporateActions(ticker: string, from: string, to: string): Promise<CorporateAction[]>;
   getSecurityMetadata(ticker: string): Promise<SecurityMetadata | null>;
   getNextEarningsDate(ticker: string): Promise<EarningsDate | null>;
+  /** All scheduled reports for a ticker within [from, to] — see EarningsCalendarEntry's doc comment for why this never includes actuals. */
+  getEarningsCalendar(ticker: string, from: string, to: string): Promise<EarningsCalendarEntry[]>;
   getCompanyNews(ticker: string, from: string, to: string): Promise<NewsItem[]>;
   getFundamentalRatios(ticker: string): Promise<FundamentalRatios | null>;
   getAnalystRecommendations(ticker: string): Promise<AnalystRecommendation[]>;

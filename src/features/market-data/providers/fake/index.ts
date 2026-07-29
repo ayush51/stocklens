@@ -1,6 +1,7 @@
 import type {
   AnalystRecommendation,
   CorporateAction,
+  EarningsCalendarEntry,
   EarningsDate,
   FundamentalRatios,
   MarketDataProvider,
@@ -23,6 +24,7 @@ const FIXTURES: Record<
     actions: CorporateAction[];
     metadata: SecurityMetadata;
     earnings: EarningsDate;
+    earningsCalendar: EarningsCalendarEntry[];
     news: NewsItem[];
     ratios: FundamentalRatios;
     recommendations: AnalystRecommendation[];
@@ -55,6 +57,17 @@ const FIXTURES: Record<
       marketCap: "3400000000000",
     },
     earnings: { ticker: "AAPL", date: "2026-10-30", isEstimate: true },
+    earningsCalendar: [
+      {
+        ticker: "AAPL",
+        fiscalYear: 2027,
+        fiscalPeriod: "Q1",
+        reportDate: "2026-10-30",
+        timing: "AFTER_MARKET",
+        epsEstimate: "1.65",
+        revenueEstimate: "95000000000",
+      },
+    ],
     news: [
       {
         id: "fake-1",
@@ -103,6 +116,10 @@ export function createFakeMarketDataProvider(): MarketDataProvider {
     },
     async getNextEarningsDate(ticker) {
       return FIXTURES[ticker]?.earnings ?? null;
+    },
+    async getEarningsCalendar(ticker, from, to) {
+      const entries = FIXTURES[ticker]?.earningsCalendar ?? [];
+      return entries.filter((entry) => entry.reportDate >= from && entry.reportDate <= to);
     },
     async getCompanyNews(ticker, from, to) {
       const news = FIXTURES[ticker]?.news ?? [];
