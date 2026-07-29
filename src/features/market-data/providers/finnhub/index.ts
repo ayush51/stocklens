@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import type {
   AnalystRecommendation,
   CorporateAction,
@@ -139,7 +140,10 @@ async function fetchYahooHistoricalPrices(ticker: string, from: string, to: stri
       headers: { "User-Agent": "Mozilla/5.0" },
       next: { revalidate: 3600 },
     });
-    if (!response.ok) return [];
+    if (!response.ok) {
+      logger.warn("yahoo_historicals_fallback_failed", { ticker, status: response.status });
+      return [];
+    }
 
     const data = (await response.json()) as YahooChartResponse;
     const result = data.chart.result?.[0];
@@ -174,7 +178,11 @@ async function fetchYahooHistoricalPrices(ticker: string, from: string, to: stri
       }));
 
     return bars.sort((a, b) => a.date.localeCompare(b.date));
-  } catch {
+  } catch (error) {
+    logger.warn("yahoo_historicals_fallback_failed", {
+      ticker,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return [];
   }
 }
@@ -188,7 +196,10 @@ export function createFinnhubMarketDataProvider(apiKey: string): MarketDataProvi
     url.searchParams.set("token", apiKey);
 
     const response = await fetch(url, { next: { revalidate: 60 } });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      logger.warn("finnhub_request_failed", { path, status: response.status });
+      return null;
+    }
     return (await response.json()) as T;
   }
 

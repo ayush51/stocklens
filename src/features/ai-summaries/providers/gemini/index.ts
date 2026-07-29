@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
 import { AppError } from "@/lib/errors";
+import { logger } from "@/lib/logger";
 import type {
   AISummaryProvider,
   AISummaryRequest,
@@ -74,6 +75,36 @@ const CHAT_SYSTEM_INSTRUCTION = `You are an investment research assistant inside
 
 const MODEL = "gemini-2.5-flash";
 
+/**
+ * Wraps a raw Gemini SDK call so every failure mode (network error,
+ * invalid/expired key, quota exceeded, malformed response) gets structured
+ * logging with real operational context (which operation, real error
+ * message) before surfacing as a generic AppError — previously these
+ * exceptions propagated raw, with no log line and no guarantee the message
+ * shown to the user didn't leak SDK/quota detail.
+ */
+async function callGemini(
+  operation: string,
+  fn: () => Promise<{ text: string | undefined }>,
+): Promise<string> {
+  let response: { text: string | undefined };
+  try {
+    response = await fn();
+  } catch (error) {
+    logger.error("gemini_request_failed", {
+      operation,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw new AppError("UPSTREAM_UNAVAILABLE", "The AI provider is temporarily unavailable.");
+  }
+
+  if (!response.text) {
+    logger.warn("gemini_empty_response", { operation });
+    throw new AppError("UPSTREAM_UNAVAILABLE", "AI generation returned no content.");
+  }
+  return response.text;
+}
+
 export function createGeminiAISummaryProvider(apiKey: string): AISummaryProvider {
   const client = new GoogleGenAI({ apiKey });
 
@@ -81,19 +112,16 @@ export function createGeminiAISummaryProvider(apiKey: string): AISummaryProvider
     async summarize(request: AISummaryRequest): Promise<AISummaryResult> {
       const subjectLabel = request.subjectType.replaceAll("_", " ").toLowerCase();
 
-      const response = await client.models.generateContent({
-        model: MODEL,
-        contents: `Summarize the following ${subjectLabel}.\n\n<untrusted_content>\n${request.content}\n</untrusted_content>`,
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
-          responseMimeType: "application/json",
-        },
-      });
-
-      const text = response.text;
-      if (!text) {
-        throw new AppError("UPSTREAM_UNAVAILABLE", "AI summary generation returned no content.");
-      }
+      const text = await callGemini("summarize", () =>
+        client.models.generateContent({
+          model: MODEL,
+          contents: `Summarize the following ${subjectLabel}.\n\n<untrusted_content>\n${request.content}\n</untrusted_content>`,
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            responseMimeType: "application/json",
+          },
+        }),
+      );
 
       return { content: text, model: MODEL, promptVersion: request.promptVersion };
     },
@@ -106,39 +134,33 @@ export function createGeminiAISummaryProvider(apiKey: string): AISummaryProvider
         )
         .join("\n");
 
-      const response = await client.models.generateContent({
-        model: MODEL,
-        contents: `Extract the current value of each of these metrics from the filing below:\n${metricList}\n\n<untrusted_content>\n${request.content}\n</untrusted_content>`,
-        config: {
-          systemInstruction: EXTRACTION_SYSTEM_INSTRUCTION,
-          responseMimeType: "application/json",
-        },
-      });
-
-      const text = response.text;
-      if (!text) {
-        throw new AppError("UPSTREAM_UNAVAILABLE", "AI KPI extraction returned no content.");
-      }
+      const text = await callGemini("extractMetrics", () =>
+        client.models.generateContent({
+          model: MODEL,
+          contents: `Extract the current value of each of these metrics from the filing below:\n${metricList}\n\n<untrusted_content>\n${request.content}\n</untrusted_content>`,
+          config: {
+            systemInstruction: EXTRACTION_SYSTEM_INSTRUCTION,
+            responseMimeType: "application/json",
+          },
+        }),
+      );
 
       return { content: text, model: MODEL, promptVersion: request.promptVersion };
     },
 
     async chat(request: ChatRequest): Promise<AISummaryResult> {
-      const response = await client.models.generateContent({
-        model: MODEL,
-        contents: request.messages.map((m) => ({
-          role: m.role === "assistant" ? "model" : "user",
-          parts: [{ text: m.content }],
-        })),
-        config: {
-          systemInstruction: `${CHAT_SYSTEM_INSTRUCTION}\n\n<portfolio_context>\n${request.context}\n</portfolio_context>`,
-        },
-      });
-
-      const text = response.text;
-      if (!text) {
-        throw new AppError("UPSTREAM_UNAVAILABLE", "The assistant returned no response.");
-      }
+      const text = await callGemini("chat", () =>
+        client.models.generateContent({
+          model: MODEL,
+          contents: request.messages.map((m) => ({
+            role: m.role === "assistant" ? "model" : "user",
+            parts: [{ text: m.content }],
+          })),
+          config: {
+            systemInstruction: `${CHAT_SYSTEM_INSTRUCTION}\n\n<portfolio_context>\n${request.context}\n</portfolio_context>`,
+          },
+        }),
+      );
 
       return { content: text, model: MODEL, promptVersion: request.promptVersion };
     },
