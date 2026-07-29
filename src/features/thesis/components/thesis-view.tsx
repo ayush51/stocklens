@@ -9,6 +9,18 @@ import type { Prisma } from "@/generated/prisma/client";
 
 type ThesisWithRevisions = Prisma.ThesisGetPayload<{ include: { revisions: true } }>;
 
+const STATUS_LABEL: Record<
+  string,
+  { text: string; variant: "default" | "outline" | "destructive" | "secondary" }
+> = {
+  UNREVIEWED: { text: "Unreviewed", variant: "outline" },
+  ON_TRACK: { text: "On track", variant: "default" },
+  WATCH: { text: "Watch", variant: "secondary" },
+  WEAKENED: { text: "Weakened", variant: "destructive" },
+  BROKEN: { text: "Broken", variant: "destructive" },
+  EXITED: { text: "Exited", variant: "outline" },
+};
+
 function toDiffable(
   entity: { targetPrice: { toString(): string } | null } & Omit<DiffableThesis, "targetPrice">,
 ): DiffableThesis {
@@ -43,7 +55,9 @@ export function ThesisView({ thesis, ticker }: { thesis: ThesisWithRevisions; ti
             <div>
               <CardTitle className="text-xl">{thesis.title}</CardTitle>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge variant={thesis.status === "ACTIVE" ? "default" : "outline"}>{thesis.status}</Badge>
+                <Badge variant={STATUS_LABEL[thesis.status]?.variant ?? "outline"}>
+                  {STATUS_LABEL[thesis.status]?.text ?? thesis.status}
+                </Badge>
                 <Badge variant="secondary">Conviction: {thesis.conviction}</Badge>
                 {thesis.targetPrice ? (
                   <Badge variant="secondary">Target: ${thesis.targetPrice.toString()}</Badge>

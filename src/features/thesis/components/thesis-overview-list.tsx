@@ -5,9 +5,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { ThesisOverviewRow } from "@/features/thesis/server/queries";
 
 const STATUS_LABEL: Record<string, string> = {
-  ACTIVE: "Active",
-  NEEDS_REVIEW: "Needs review",
-  CLOSED: "Closed",
+  UNREVIEWED: "Unreviewed",
+  ON_TRACK: "On track",
+  WATCH: "Watch",
+  WEAKENED: "Weakened",
+  BROKEN: "Broken",
+  EXITED: "Exited",
 };
 
 function dateOrNull(date: Date | null) {

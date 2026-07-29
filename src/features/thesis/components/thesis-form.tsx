@@ -71,7 +71,7 @@ export function ThesisForm({
       sources: existing?.sources ?? [],
       conviction: existing?.conviction ?? "MEDIUM",
       targetPrice: existing?.targetPrice?.toString() ?? "",
-      status: existing?.status ?? "ACTIVE",
+      status: existing?.status ?? "UNREVIEWED",
     },
   });
 

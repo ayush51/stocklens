@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const CONVICTION_LEVELS = ["LOW", "MEDIUM", "HIGH"] as const;
-export const THESIS_STATUSES = ["ACTIVE", "NEEDS_REVIEW", "CLOSED"] as const;
+export const THESIS_STATUSES = ["UNREVIEWED", "ON_TRACK", "WATCH", "WEAKENED", "BROKEN", "EXITED"] as const;
 
 const optionalText = z.string().trim().optional().or(z.literal(""));
 

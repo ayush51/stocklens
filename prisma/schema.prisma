@@ -413,10 +413,17 @@ enum ConvictionLevel {
   HIGH
 }
 
+// Matches instructions.md §8's named statuses exactly, not an ad hoc
+// taxonomy — was ACTIVE/NEEDS_REVIEW/CLOSED until 2026-07-29, changed
+// while zero real Thesis rows existed yet (verified before migrating),
+// so this was a clean rename, not a data migration.
 enum ThesisStatus {
-  ACTIVE
-  NEEDS_REVIEW
-  CLOSED
+  UNREVIEWED
+  ON_TRACK
+  WATCH
+  WEAKENED
+  BROKEN
+  EXITED
 }
 
 model Thesis {
@@ -445,7 +452,7 @@ model Thesis {
   sources                 String[]        @default([])
   conviction              ConvictionLevel @default(MEDIUM)
   targetPrice             Decimal?        @db.Decimal(20, 4)
-  status                  ThesisStatus    @default(ACTIVE)
+  status                  ThesisStatus    @default(UNREVIEWED)
   createdAt               DateTime        @default(now())
   updatedAt               DateTime        @updatedAt
 
