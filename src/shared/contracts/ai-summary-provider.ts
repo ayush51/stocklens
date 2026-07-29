@@ -52,6 +52,17 @@ export interface ThesisDraftRequest {
   promptVersion: string;
 }
 
+export interface NewsImpactRequest {
+  ticker: string;
+  companyName: string;
+  /** Untrusted third-party content — headline/summary only, never scraped full article text. */
+  headline: string;
+  summary: string;
+  /** The user's own thesis summary for this company, if one exists — real, workspace-specific context. */
+  thesisContext: string | null;
+  promptVersion: string;
+}
+
 export interface AISummaryProvider {
   summarize(request: AISummaryRequest): Promise<AISummaryResult>;
   /**
@@ -78,4 +89,12 @@ export interface AISummaryProvider {
    * thesis/lib/thesis-draft-schema.ts.
    */
   draftThesis(request: ThesisDraftRequest): Promise<AISummaryResult>;
+  /**
+   * Classifies one news item's likely relevance from its headline/summary
+   * alone (see news/README and docs/phase-0/09-security-model.md §5 —
+   * full article text is never fetched/scraped). result.content is a JSON
+   * string encoding NewsImpactContent — see
+   * news/lib/news-impact-schema.ts.
+   */
+  classifyNewsImpact(request: NewsImpactRequest): Promise<AISummaryResult>;
 }

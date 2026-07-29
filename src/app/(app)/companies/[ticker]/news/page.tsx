@@ -20,5 +20,5 @@ export default async function CompanyNewsPage({ params }: { params: Promise<{ ti
     );
   }
 
-  return <NewsList items={news} />;
+  return <NewsList items={news} companyId={company.id} ticker={ticker} companyName={company.name} />;
 }

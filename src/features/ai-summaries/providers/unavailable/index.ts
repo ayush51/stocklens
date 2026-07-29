@@ -34,4 +34,10 @@ export const unavailableAISummaryProvider: AISummaryProvider = {
       "AI thesis drafting isn't configured yet — GEMINI_API_KEY is not set.",
     );
   },
+  async classifyNewsImpact() {
+    throw new AppError(
+      "UPSTREAM_UNAVAILABLE",
+      "AI news impact classification isn't configured yet — GEMINI_API_KEY is not set.",
+    );
+  },
 };
