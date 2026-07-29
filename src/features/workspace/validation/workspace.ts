@@ -1,0 +1,8 @@
+import { z } from "zod";
+
+export const renameWorkspaceSchema = z.object({
+  workspaceId: z.uuid(),
+  name: z.string().trim().min(1, "Name is required").max(100),
+});
+
+export type RenameWorkspaceInput = z.infer<typeof renameWorkspaceSchema>;
