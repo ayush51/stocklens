@@ -22,6 +22,7 @@ export interface ThesisOverviewRow {
   allocationPct: string;
   isOverConcentrationThreshold: boolean;
   hasThesis: boolean;
+  thesisId: string | null;
   status: string | null;
   conviction: string | null;
   updatedAt: Date | null;
@@ -44,7 +45,7 @@ export async function getThesisOverviewForUser(userId: string): Promise<ThesisOv
   const prisma = forUser(userId);
   const theses = await prisma.thesis.findMany({
     where: { companyId: { in: holdings.map((h) => h.companyId) } },
-    select: { companyId: true, status: true, conviction: true, updatedAt: true },
+    select: { id: true, companyId: true, status: true, conviction: true, updatedAt: true },
   });
   const thesisByCompany = new Map(theses.map((t) => [t.companyId, t]));
 
@@ -57,6 +58,7 @@ export async function getThesisOverviewForUser(userId: string): Promise<ThesisOv
       allocationPct: h.allocationPct,
       isOverConcentrationThreshold: h.isOverConcentrationThreshold,
       hasThesis: !!thesis,
+      thesisId: thesis?.id ?? null,
       status: thesis?.status ?? null,
       conviction: thesis?.conviction ?? null,
       updatedAt: thesis?.updatedAt ?? null,
