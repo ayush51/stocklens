@@ -201,17 +201,22 @@ export function createFinnhubMarketDataProvider(
   const yahooHistoricalsFallbackEnabled = options.yahooHistoricalsFallbackEnabled ?? true;
 
   // Verified live (2026-07-29): bursts of concurrent requests against
-  // Finnhub's free tier 429 a meaningful fraction of them — retry-with-
-  // backoff alone still let some /quote calls exhaust all retries and fail
-  // outright. A page with 36 holdings (a real portfolio in this app) fires
-  // 36 quote requests on every load, so this isn't an edge case. Every
-  // request dispatched through this provider instance is serialized
-  // through one queue with a minimum spacing between requests — this
-  // controls the actual dispatch rate globally, not just per-caller
-  // concurrency, which is what retry-with-backoff alone couldn't fix.
-  const MIN_REQUEST_SPACING_MS = 150; // ~6-7/sec sustained, well under Finnhub's documented 60/min
-  const MAX_RETRIES = 4;
-  const BASE_DELAY_MS = 500;
+  // Finnhub's free tier 429 a meaningful fraction of them. A page with 36
+  // holdings (a real portfolio in this app) fires 36 quote requests on
+  // every load, so this isn't an edge case. Every request dispatched
+  // through this provider instance is serialized through one queue with a
+  // minimum spacing between requests, controlling the actual dispatch rate
+  // globally rather than just per-caller concurrency.
+  //
+  // First attempt at this used 150ms spacing (~6.7/sec) reasoning it was
+  // "well under 60/min" — that math was simply wrong: 60/min IS 1/sec, so
+  // 150ms spacing was actually ~6-7x FASTER than the real limit, which is
+  // exactly why live retesting still showed heavy 429s even with the
+  // "fix" in place. 1050ms (~57/min, a hair under the documented cap)
+  // is the corrected value — re-verified live after this change.
+  const MIN_REQUEST_SPACING_MS = 1050;
+  const MAX_RETRIES = 2;
+  const BASE_DELAY_MS = 2000;
   let dispatchQueue: Promise<void> = Promise.resolve();
 
   function scheduleDispatch(): Promise<void> {

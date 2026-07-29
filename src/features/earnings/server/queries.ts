@@ -1,8 +1,13 @@
+import { forUser } from "@/lib/db/rls";
 import { getMarketDataProvider } from "@/features/market-data/server/get-provider";
-import { getPortfoliosForUser } from "@/features/portfolios/server/queries";
 import { mapWithConcurrency } from "@/lib/concurrency";
 
-/** Finnhub's free-tier rate limit is generous per-second but not unlimited — verified live that 36 simultaneous requests 429s several of them. */
+/**
+ * Real rate-limit enforcement lives inside the Finnhub client itself now
+ * (a serialized dispatch queue paced to Finnhub's actual free-tier limit —
+ * see providers/finnhub/index.ts). This just bounds how many requests are
+ * queued up at once from this one caller, as a second layer.
+ */
 const MAX_CONCURRENT_REQUESTS = 8;
 
 export interface UpcomingEarningsRow {
@@ -15,7 +20,6 @@ export interface UpcomingEarningsRow {
   timing: string | null;
   epsEstimate: string | null;
   revenueEstimate: string | null;
-  allocationPct: string;
 }
 
 const LOOKAHEAD_DAYS = 120;
@@ -23,34 +27,45 @@ const LOOKAHEAD_DAYS = 120;
 /**
  * Live, not DB-cached: unlike filings (immutable once published), upcoming
  * earnings estimates can be revised and new quarters roll in continuously,
- * so freshness matters more than avoiding a refetch. One provider call per
- * held company, bounded to MAX_CONCURRENT_REQUESTS in flight — verified
- * live that firing all requests at once (as portfolios/server/queries.ts
- * does for quotes, a lighter endpoint) 429s a meaningful fraction of
- * /calendar/earnings calls on Finnhub's free tier.
+ * so freshness matters more than avoiding a refetch.
+ *
+ * Reads held companies directly (ticker/name only) rather than through
+ * getPortfoliosForUser, which also fetches a live quote per holding to
+ * compute market value/allocation — real cost once the Finnhub client's
+ * rate-limit pacing was fixed (verified live: doubled this page's load
+ * time from ~38s to ~76s, since it was paying for two full paced fetches
+ * of the same 36 holdings back to back). This feature never displays
+ * price/allocation data, so there was nothing to justify paying for it.
  */
 export async function getUpcomingEarningsForUser(userId: string): Promise<UpcomingEarningsRow[]> {
-  const portfolios = await getPortfoliosForUser(userId);
-  const holdings = portfolios.flatMap((p) => [...p.stocks, ...p.etfs]);
+  const prisma = forUser(userId);
+  const holdings = await prisma.holding.findMany({
+    where: { quantity: { not: 0 } },
+    include: { company: true },
+  });
   if (holdings.length === 0) return [];
+
+  // A company can appear in more than one portfolio (e.g. a manual
+  // portfolio and a Robinhood-synced one) — de-duplicate so its earnings
+  // date isn't fetched or shown twice.
+  const uniqueCompanies = [...new Map(holdings.map((h) => [h.companyId, h.company])).values()];
 
   const provider = getMarketDataProvider();
   const from = new Date().toISOString().slice(0, 10);
   const to = new Date(Date.now() + LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const results = await mapWithConcurrency(holdings, MAX_CONCURRENT_REQUESTS, async (h) => {
-    const entries = await provider.getEarningsCalendar(h.ticker, from, to);
+  const results = await mapWithConcurrency(uniqueCompanies, MAX_CONCURRENT_REQUESTS, async (company) => {
+    const entries = await provider.getEarningsCalendar(company.ticker, from, to);
     return entries.map((entry) => ({
-      companyId: h.companyId,
-      ticker: h.ticker,
-      name: h.name,
+      companyId: company.id,
+      ticker: company.ticker,
+      name: company.name,
       fiscalYear: entry.fiscalYear,
       fiscalPeriod: entry.fiscalPeriod,
       reportDate: entry.reportDate,
       timing: entry.timing,
       epsEstimate: entry.epsEstimate,
       revenueEstimate: entry.revenueEstimate,
-      allocationPct: h.allocationPct,
     }));
   });
 
