@@ -187,7 +187,11 @@ async function fetchYahooHistoricalPrices(ticker: string, from: string, to: stri
   }
 }
 
-export function createFinnhubMarketDataProvider(apiKey: string): MarketDataProvider {
+export function createFinnhubMarketDataProvider(
+  apiKey: string,
+  options: { yahooHistoricalsFallbackEnabled?: boolean } = {},
+): MarketDataProvider {
+  const yahooHistoricalsFallbackEnabled = options.yahooHistoricalsFallbackEnabled ?? true;
   async function get<T>(path: string, params: Record<string, string>): Promise<T | null> {
     const url = new URL(`${BASE_URL}${path}`);
     for (const [key, value] of Object.entries(params)) {
@@ -240,6 +244,11 @@ export function createFinnhubMarketDataProvider(apiKey: string): MarketDataProvi
           volume: String(data.v[i]),
         }));
         return bars.sort((a, b) => a.date.localeCompare(b.date));
+      }
+
+      if (!yahooHistoricalsFallbackEnabled) {
+        logger.info("yahoo_historicals_fallback_disabled", { ticker });
+        return [];
       }
 
       return fetchYahooHistoricalPrices(ticker, from, to);

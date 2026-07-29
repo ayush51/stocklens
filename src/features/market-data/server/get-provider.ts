@@ -13,5 +13,7 @@ export function getMarketDataProvider(): MarketDataProvider {
   if (!env.FINNHUB_API_KEY) {
     return unavailableMarketDataProvider;
   }
-  return createFinnhubMarketDataProvider(env.FINNHUB_API_KEY);
+  return createFinnhubMarketDataProvider(env.FINNHUB_API_KEY, {
+    yahooHistoricalsFallbackEnabled: env.YAHOO_HISTORICALS_FALLBACK_ENABLED,
+  });
 }

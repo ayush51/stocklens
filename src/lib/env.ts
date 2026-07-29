@@ -38,6 +38,18 @@ const envSchema = z.object({
   // the app. Get a free-tier key at https://finnhub.io/register.
   FINNHUB_API_KEY: z.string().min(1).optional(),
 
+  // Kill switch for the Yahoo Finance chart-API fallback used by
+  // getHistoricalPrices when Finnhub's own /stock/candle can't serve a
+  // free-tier request. That endpoint is unofficial and undocumented (see
+  // src/features/market-data/providers/finnhub/index.ts) — if it ever
+  // starts blocking requests, rate-limiting aggressively, or raises a
+  // concern not worth carrying, this can be flipped off without a code
+  // change or deploy. Defaults on since the fallback is verified working.
+  YAHOO_HISTORICALS_FALLBACK_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
+
   // AI-generated filing/financial summaries — see
   // src/shared/contracts/ai-summary-provider.ts. Optional: absent means
   // src/features/ai-summaries/server/get-provider.ts falls back to a
