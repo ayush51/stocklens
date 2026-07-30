@@ -1,9 +1,18 @@
 /**
  * Verified against the real Supabase Postgres instance, same reasoning as
  * src/lib/db/rls.test.ts: RLS-scoped writes/reads can't be meaningfully
- * mocked. Reuses the same pre-existing throwaway test account and real
- * AAPL Company row, with fully self-contained fixture data cleaned up
- * afterward — never touches a real user's workspace.
+ * mocked. Reuses the same pre-existing throwaway test account, with fully
+ * self-contained fixture data cleaned up afterward — never touches a real
+ * user's workspace.
+ *
+ * Uses MSFT rather than AAPL deliberately: rls.test.ts uses the same
+ * USER_A_ID and creates its own Thesis for AAPL under that shared
+ * workspace. Vitest runs test files in parallel by default, and Thesis
+ * has no unique constraint on (workspaceId, companyId) — a real, now-
+ * documented gap, not something this test should silently work around by
+ * picking a different company alone. Using a different company here just
+ * removes the collision surface between these two specific files; it
+ * doesn't fix the underlying missing constraint.
  *
  * Finnhub's free-tier calendar never returns past dates (see
  * EarningsCalendarEntry's doc comment), so the "upcoming -> becomes
@@ -11,7 +20,7 @@
  * end-to-end through the live provider in a test. Instead this creates the
  * EarningsEvent row directly (exactly what persistEarningsEvents would
  * have written had this quarter still been upcoming when it ran) against
- * a real, already-cached AAPL FinancialStatement row, so the
+ * a real, already-cached MSFT FinancialStatement row, so the
  * actual-vs-estimate join and beat/miss classification are verified
  * against real reported figures, not synthetic ones.
  */
@@ -61,8 +70,8 @@ describe("earnings review workflow (integration)", () => {
   beforeAll(async () => {
     workspaceId = await ensureTestWorkspace(USER_A_ID, "earnings-review-test-a@example.com");
 
-    const company = await prismaService.company.findFirst({ where: { ticker: "AAPL" } });
-    if (!company) throw new Error("Fixture requires an AAPL Company row to exist");
+    const company = await prismaService.company.findFirst({ where: { ticker: "MSFT" } });
+    if (!company) throw new Error("Fixture requires an MSFT Company row to exist");
     companyId = company.id;
 
     // A real, already-cached statement — verifies the join against actual
@@ -71,7 +80,7 @@ describe("earnings review workflow (integration)", () => {
       where: { companyId, fiscalPeriod: { in: ["Q1", "Q2", "Q3", "Q4"] }, eps: { not: null } },
       orderBy: [{ fiscalYear: "desc" }, { fiscalPeriod: "desc" }],
     });
-    if (!statement) throw new Error("Fixture requires a real cached AAPL FinancialStatement row to exist");
+    if (!statement) throw new Error("Fixture requires a real cached MSFT FinancialStatement row to exist");
     statementFiscalYear = statement.fiscalYear;
     statementFiscalPeriod = statement.fiscalPeriod;
     statementEps = statement.eps!.toString();
@@ -138,7 +147,7 @@ describe("earnings review workflow (integration)", () => {
     const result = await saveEarningsReview(USER_A_ID, workspaceId, {
       earningsEventId,
       companyId,
-      ticker: "AAPL",
+      ticker: "MSFT",
       notes: "Beat on EPS — no change to the core thesis, but worth tracking margin trend.",
       affectsThesis: true,
     });
@@ -167,7 +176,7 @@ describe("earnings review workflow (integration)", () => {
     const result = await saveEarningsReview(USER_A_ID, workspaceId, {
       earningsEventId,
       companyId,
-      ticker: "AAPL",
+      ticker: "MSFT",
       notes: "No material change.",
       affectsThesis: false,
     });
