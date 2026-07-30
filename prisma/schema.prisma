@@ -276,6 +276,19 @@ model FinancialStatement {
   eps              Decimal?     @db.Decimal(10, 4)
   totalAssets      Decimal?     @db.Decimal(24, 2)
   totalLiabilities Decimal?     @db.Decimal(24, 2)
+  // No totalDebt/netDebt column: real EDGAR XBRL debt tags vary too
+  // inconsistently across companies (verified live 2026-07-30 — NVDA
+  // reports LongTermDebtNoncurrent + DebtCurrent separately, ORCL reports
+  // one combined LongTermDebt) to sum reliably into one figure without a
+  // real risk of double- or under-counting. See edgar-xbrl/index.ts.
+  operatingIncome          Decimal? @db.Decimal(24, 2)
+  operatingCashFlow        Decimal? @db.Decimal(24, 2)
+  capitalExpenditures      Decimal? @db.Decimal(24, 2)
+  cashAndEquivalents       Decimal? @db.Decimal(24, 2)
+  stockBasedCompensation   Decimal? @db.Decimal(24, 2)
+  dividendsPaid            Decimal? @db.Decimal(24, 2)
+  buybacks                 Decimal? @db.Decimal(24, 2)
+  dilutedSharesOutstanding Decimal? @db.Decimal(20, 0)
   sourceUrl        String?
   fetchedAt        DateTime     @default(now())
 
