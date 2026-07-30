@@ -1,4 +1,5 @@
 import { AppError } from "@/lib/errors";
+import { recordProviderCall } from "@/lib/provider-log";
 import type { FinancialStatementSummary, MetricsProvider } from "@/shared/contracts/metrics-provider";
 
 const SEC_USER_AGENT = "StockLens research@stocklens.app";
@@ -161,15 +162,30 @@ const CUMULATIVE_ALLOWED_FIELDS = new Set<keyof typeof CONCEPT_CANDIDATES>([
 ]);
 
 async function fetchCompanyFacts(cik: string): Promise<XbrlCompanyFacts> {
+  const startedAt = Date.now();
   const response = await fetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`, {
     headers: { "User-Agent": SEC_USER_AGENT },
     next: { revalidate: 60 * 60 * 24 },
   });
 
   if (!response.ok) {
+    recordProviderCall({
+      provider: "edgar-xbrl",
+      operation: "companyfacts",
+      durationMs: Date.now() - startedAt,
+      status: "ERROR",
+      errorCategory: `http_${response.status}`,
+      rateLimited: response.status === 429,
+    });
     throw new AppError("UPSTREAM_UNAVAILABLE", "Could not reach SEC EDGAR to fetch financial statements.");
   }
 
+  recordProviderCall({
+    provider: "edgar-xbrl",
+    operation: "companyfacts",
+    durationMs: Date.now() - startedAt,
+    status: "SUCCESS",
+  });
   return response.json() as Promise<XbrlCompanyFacts>;
 }
 

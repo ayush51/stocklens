@@ -1,4 +1,5 @@
 import { logger } from "@/lib/logger";
+import { recordProviderCall } from "@/lib/provider-log";
 import type {
   AnalystRecommendation,
   CorporateAction,
@@ -150,6 +151,8 @@ async function fetchYahooHistoricalPrices(ticker: string, from: string, to: stri
   url.searchParams.set("period2", String(toUnixSeconds(to)));
   url.searchParams.set("interval", "1d");
 
+  const startedAt = Date.now();
+
   try {
     const response = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
@@ -157,6 +160,14 @@ async function fetchYahooHistoricalPrices(ticker: string, from: string, to: stri
     });
     if (!response.ok) {
       logger.warn("yahoo_historicals_fallback_failed", { ticker, status: response.status });
+      recordProviderCall({
+        provider: "yahoo",
+        operation: "chart",
+        durationMs: Date.now() - startedAt,
+        status: "ERROR",
+        errorCategory: `http_${response.status}`,
+        usedFallback: true,
+      });
       return [];
     }
 
@@ -192,11 +203,26 @@ async function fetchYahooHistoricalPrices(ticker: string, from: string, to: stri
         volume: String(bar.volume ?? 0),
       }));
 
+    recordProviderCall({
+      provider: "yahoo",
+      operation: "chart",
+      durationMs: Date.now() - startedAt,
+      status: "SUCCESS",
+      usedFallback: true,
+    });
     return bars.sort((a, b) => a.date.localeCompare(b.date));
   } catch (error) {
     logger.warn("yahoo_historicals_fallback_failed", {
       ticker,
       error: error instanceof Error ? error.message : String(error),
+    });
+    recordProviderCall({
+      provider: "yahoo",
+      operation: "chart",
+      durationMs: Date.now() - startedAt,
+      status: "ERROR",
+      errorCategory: "exception",
+      usedFallback: true,
     });
     return [];
   }
@@ -246,22 +272,42 @@ export function createFinnhubMarketDataProvider(
     }
     url.searchParams.set("token", apiKey);
 
+    const startedAt = Date.now();
+    let wasRateLimited = false;
+
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       await scheduleDispatch();
       const response = await fetch(url, { next: { revalidate: 60 } });
 
       if (response.ok) {
+        recordProviderCall({
+          provider: "finnhub",
+          operation: path,
+          durationMs: Date.now() - startedAt,
+          status: "SUCCESS",
+          rateLimited: wasRateLimited,
+        });
         return (await response.json()) as T;
       }
 
       if (response.status === 429 && attempt < MAX_RETRIES) {
+        wasRateLimited = true;
         const delayMs = BASE_DELAY_MS * 2 ** attempt;
         logger.warn("finnhub_rate_limited_retrying", { path, attempt: attempt + 1, delayMs });
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         continue;
       }
 
+      if (response.status === 429) wasRateLimited = true;
       logger.warn("finnhub_request_failed", { path, status: response.status, attempt });
+      recordProviderCall({
+        provider: "finnhub",
+        operation: path,
+        durationMs: Date.now() - startedAt,
+        status: "ERROR",
+        errorCategory: `http_${response.status}`,
+        rateLimited: wasRateLimited,
+      });
       return null;
     }
 

@@ -398,6 +398,30 @@ model SecFiling {
   @@index([companyId, filedAt])
 }
 
+enum ProviderCallStatus {
+  SUCCESS
+  ERROR
+}
+
+// Global/operational, not tenant data — instructions.md §13 provider
+// resilience tracking. Deliberately narrow: no "freshness" field (already
+// covered per-quote via isQuoteStale) and no cross-provider "data
+// disagreements" tracking (there's only ever one active provider per data
+// type right now, so there's nothing to disagree with yet).
+model ProviderCallLog {
+  id            String             @id @default(uuid()) @db.Uuid
+  provider      String // "finnhub" | "edgar-xbrl" | "yahoo"
+  operation     String // endpoint path or method name
+  requestedAt   DateTime           @default(now())
+  durationMs    Int
+  status        ProviderCallStatus
+  errorCategory String?
+  rateLimited   Boolean            @default(false)
+  usedFallback  Boolean            @default(false)
+
+  @@index([provider, requestedAt])
+}
+
 model EarningsEvent {
   id              String       @id @default(uuid()) @db.Uuid
   companyId       String       @db.Uuid
