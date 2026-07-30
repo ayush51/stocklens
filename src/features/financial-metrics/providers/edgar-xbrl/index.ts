@@ -1,4 +1,5 @@
 import { AppError } from "@/lib/errors";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { recordProviderCall } from "@/lib/provider-log";
 import type { FinancialStatementSummary, MetricsProvider } from "@/shared/contracts/metrics-provider";
 
@@ -163,10 +164,11 @@ const CUMULATIVE_ALLOWED_FIELDS = new Set<keyof typeof CONCEPT_CANDIDATES>([
 
 async function fetchCompanyFacts(cik: string): Promise<XbrlCompanyFacts> {
   const startedAt = Date.now();
-  const response = await fetch(`https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`, {
-    headers: { "User-Agent": SEC_USER_AGENT },
-    next: { revalidate: 60 * 60 * 24 },
-  });
+  const response = await fetchWithTimeout(
+    `https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`,
+    { headers: { "User-Agent": SEC_USER_AGENT }, next: { revalidate: 60 * 60 * 24 } },
+    15_000, // can be a multi-MB payload for companies with a long filing history
+  );
 
   if (!response.ok) {
     recordProviderCall({

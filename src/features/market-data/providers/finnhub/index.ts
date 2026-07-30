@@ -1,5 +1,6 @@
 import { logger } from "@/lib/logger";
 import { recordProviderCall } from "@/lib/provider-log";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import type {
   AnalystRecommendation,
   CorporateAction,
@@ -154,7 +155,7 @@ async function fetchYahooHistoricalPrices(ticker: string, from: string, to: stri
   const startedAt = Date.now();
 
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
       next: { revalidate: 3600 },
     });
@@ -277,7 +278,7 @@ export function createFinnhubMarketDataProvider(
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       await scheduleDispatch();
-      const response = await fetch(url, { next: { revalidate: 60 } });
+      const response = await fetchWithTimeout(url, { next: { revalidate: 60 } });
 
       if (response.ok) {
         recordProviderCall({

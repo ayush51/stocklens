@@ -163,7 +163,11 @@ async function callGemini(
 }
 
 export function createGeminiAISummaryProvider(apiKey: string): AISummaryProvider {
-  const client = new GoogleGenAI({ apiKey });
+  // instructions.md §6 "apply timeouts to external calls" — every AI
+  // feature in this app (summaries, thesis drafts, KPI proposals, the
+  // chat assistant) goes through this one client, so one timeout here
+  // covers all of them.
+  const client = new GoogleGenAI({ apiKey, httpOptions: { timeout: 30_000 } });
 
   return {
     async summarize(request: AISummaryRequest): Promise<AISummaryResult> {

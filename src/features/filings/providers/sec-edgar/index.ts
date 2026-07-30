@@ -1,4 +1,5 @@
 import { AppError } from "@/lib/errors";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import type { FilingsProvider, FilingSummary } from "@/shared/contracts/filings-provider";
 
 const SEC_USER_AGENT = "StockLens research@stocklens.app";
@@ -17,7 +18,7 @@ interface EdgarSubmissionsResponse {
 
 export const secEdgarFilingsProvider: FilingsProvider = {
   async listFilingsForCompany(cik, opts) {
-    const response = await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, {
+    const response = await fetchWithTimeout(`https://data.sec.gov/submissions/CIK${cik}.json`, {
       headers: { "User-Agent": SEC_USER_AGENT },
       // Filings change more often than the ticker list, but still not
       // minute-to-minute — a few hours' cache is a reasonable trade-off
@@ -55,7 +56,11 @@ export const secEdgarFilingsProvider: FilingsProvider = {
   },
 
   async getFilingDocumentText(documentUrl) {
-    const response = await fetch(documentUrl, { headers: { "User-Agent": SEC_USER_AGENT } });
+    const response = await fetchWithTimeout(
+      documentUrl,
+      { headers: { "User-Agent": SEC_USER_AGENT } },
+      20_000, // filing documents can be large HTML/text files, allow more time than the default
+    );
     if (!response.ok) {
       throw new AppError("UPSTREAM_UNAVAILABLE", "Could not fetch the filing document.");
     }

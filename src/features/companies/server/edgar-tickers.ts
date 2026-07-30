@@ -1,4 +1,5 @@
 import { AppError } from "@/lib/errors";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 // SEC requires every request to identify a contact — see
 // https://www.sec.gov/os/webmaster-faq#developers. Replace with a real
@@ -28,10 +29,11 @@ export interface ResolvedTicker {
  * matters for ticker resolution.
  */
 async function fetchEdgarTickerMap(): Promise<EdgarTickerMap> {
-  const response = await fetch("https://www.sec.gov/files/company_tickers.json", {
-    headers: { "User-Agent": SEC_USER_AGENT },
-    next: { revalidate: 60 * 60 * 24 },
-  });
+  const response = await fetchWithTimeout(
+    "https://www.sec.gov/files/company_tickers.json",
+    { headers: { "User-Agent": SEC_USER_AGENT }, next: { revalidate: 60 * 60 * 24 } },
+    15_000, // ~1MB payload, allow a bit more than the default
+  );
 
   if (!response.ok) {
     throw new AppError("UPSTREAM_UNAVAILABLE", "Could not reach SEC EDGAR to resolve the ticker.");
