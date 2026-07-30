@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth/session";
@@ -20,6 +21,9 @@ export default async function WorkspaceSettingsPage() {
       <PageHeader title="Workspace settings" />
       <WorkspaceSettingsForm workspaceId={settings.id} initialName={settings.name} />
       <MemberList members={settings.members} />
+      <Link href="/settings/observability" className="text-primary block text-sm font-medium hover:underline">
+        View observability →
+      </Link>
     </div>
   );
 }
