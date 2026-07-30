@@ -240,6 +240,20 @@ model Company {
   metricTemplate         CompanyMetricTemplate?
   decisionJournalEntries DecisionJournalEntry[]
   aiSummaries            AISummary[]
+
+  // Signal Convergence — see the section below. Company doubles as the
+  // spec's "PublicCompany": it already has ticker/cik/name/sector/industry,
+  // and PriceSnapshot already covers "MarketPriceSnapshot" — reused rather
+  // than duplicated (instructions.md §4 "do not create duplicate models").
+  aliases                        CompanyAlias[]
+  relationshipsAsParent          CompanyRelationship[]           @relation("RelationshipFrom")
+  relationshipsAsSubsidiary      CompanyRelationship[]           @relation("RelationshipTo")
+  suggestedInResolutions         EntityResolutionReview[]        @relation("SuggestedCompany")
+  resolvedInResolutions          EntityResolutionReview[]        @relation("ResolvedCompany")
+  governmentContractEvents       GovernmentContractEvent[]
+  insiderTransactionEvents       InsiderTransactionEvent[]
+  congressionalTransactionEvents CongressionalTransactionEvent[]
+  signalSnapshots                SignalSnapshot[]
 }
 
 model PriceSnapshot {
@@ -266,31 +280,31 @@ enum FiscalPeriod {
 }
 
 model FinancialStatement {
-  id               String       @id @default(uuid()) @db.Uuid
-  companyId        String       @db.Uuid
-  fiscalYear       Int
-  fiscalPeriod     FiscalPeriod
-  revenue          Decimal?     @db.Decimal(24, 2)
-  netIncome        Decimal?     @db.Decimal(24, 2)
-  grossProfit      Decimal?     @db.Decimal(24, 2)
-  eps              Decimal?     @db.Decimal(10, 4)
-  totalAssets      Decimal?     @db.Decimal(24, 2)
-  totalLiabilities Decimal?     @db.Decimal(24, 2)
+  id                       String       @id @default(uuid()) @db.Uuid
+  companyId                String       @db.Uuid
+  fiscalYear               Int
+  fiscalPeriod             FiscalPeriod
+  revenue                  Decimal?     @db.Decimal(24, 2)
+  netIncome                Decimal?     @db.Decimal(24, 2)
+  grossProfit              Decimal?     @db.Decimal(24, 2)
+  eps                      Decimal?     @db.Decimal(10, 4)
+  totalAssets              Decimal?     @db.Decimal(24, 2)
+  totalLiabilities         Decimal?     @db.Decimal(24, 2)
   // No totalDebt/netDebt column: real EDGAR XBRL debt tags vary too
   // inconsistently across companies (verified live 2026-07-30 — NVDA
   // reports LongTermDebtNoncurrent + DebtCurrent separately, ORCL reports
   // one combined LongTermDebt) to sum reliably into one figure without a
   // real risk of double- or under-counting. See edgar-xbrl/index.ts.
-  operatingIncome          Decimal? @db.Decimal(24, 2)
-  operatingCashFlow        Decimal? @db.Decimal(24, 2)
-  capitalExpenditures      Decimal? @db.Decimal(24, 2)
-  cashAndEquivalents       Decimal? @db.Decimal(24, 2)
-  stockBasedCompensation   Decimal? @db.Decimal(24, 2)
-  dividendsPaid            Decimal? @db.Decimal(24, 2)
-  buybacks                 Decimal? @db.Decimal(24, 2)
-  dilutedSharesOutstanding Decimal? @db.Decimal(20, 0)
-  sourceUrl        String?
-  fetchedAt        DateTime     @default(now())
+  operatingIncome          Decimal?     @db.Decimal(24, 2)
+  operatingCashFlow        Decimal?     @db.Decimal(24, 2)
+  capitalExpenditures      Decimal?     @db.Decimal(24, 2)
+  cashAndEquivalents       Decimal?     @db.Decimal(24, 2)
+  stockBasedCompensation   Decimal?     @db.Decimal(24, 2)
+  dividendsPaid            Decimal?     @db.Decimal(24, 2)
+  buybacks                 Decimal?     @db.Decimal(24, 2)
+  dilutedSharesOutstanding Decimal?     @db.Decimal(20, 0)
+  sourceUrl                String?
+  fetchedAt                DateTime     @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -806,4 +820,344 @@ model AuditLog {
   user      User      @relation(fields: [userId], references: [id])
 
   @@index([workspaceId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Signal Convergence — global reference data, same footing as
+// Company/FinancialStatement/EarningsEvent: one government contract or
+// insider transaction is the same real-world fact for every user, not
+// tenant data. Public-read RLS, service-role writes — see the
+// rls_and_roles-style grant added in this feature's migration.
+// ─────────────────────────────────────────────────────────────
+
+enum CompanyAliasType {
+  LEGAL_NAME
+  FORMER_NAME
+  DBA
+  GOVERNMENT_CONTRACTOR_NAME
+  MANUAL_ALIAS
+}
+
+// Maps a raw name string as it appears in an external source (a USAspending
+// recipient name, a congressional disclosure's asset name) to a resolved
+// Company — the mechanism behind entity resolution for both government
+// contracts and congressional trades, which rarely report a ticker directly.
+model CompanyAlias {
+  id        String           @id @default(uuid()) @db.Uuid
+  companyId String           @db.Uuid
+  alias     String
+  aliasType CompanyAliasType
+  source    String // e.g. "usaspending", "manual"
+  verified  Boolean          @default(false)
+  notes     String?
+  createdAt DateTime         @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, alias, aliasType])
+  @@index([alias])
+}
+
+enum CompanyRelationshipType {
+  PARENT_OF
+  SUBSIDIARY_OF
+}
+
+// A government contract awarded to a subsidiary may only map to a public
+// company via its parent — this is what lets the UI say "Contract
+// recipient: [subsidiary]. Public parent association: [ticker]." instead
+// of silently treating the subsidiary as if it were the public company.
+model CompanyRelationship {
+  id               String                  @id @default(uuid()) @db.Uuid
+  fromCompanyId    String                  @db.Uuid
+  toCompanyId      String                  @db.Uuid
+  relationshipType CompanyRelationshipType
+  confidence       Decimal                 @db.Decimal(3, 2)
+  verified         Boolean                 @default(false)
+  notes            String?
+  createdAt        DateTime                @default(now())
+
+  fromCompany Company @relation("RelationshipFrom", fields: [fromCompanyId], references: [id], onDelete: Cascade)
+  toCompany   Company @relation("RelationshipTo", fields: [toCompanyId], references: [id], onDelete: Cascade)
+
+  @@unique([fromCompanyId, toCompanyId, relationshipType])
+}
+
+enum ResolutionSourceType {
+  GOVERNMENT_CONTRACT
+  CONGRESSIONAL_TRANSACTION
+}
+
+enum ResolutionReviewStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+// A queue of raw names that didn't resolve with enough confidence to
+// auto-map — "never force a ticker match when confidence is low" means
+// low-confidence events sit here, unlinked, until a human confirms or
+// rejects the suggestion, rather than silently guessing.
+model EntityResolutionReview {
+  id                  String                 @id @default(uuid()) @db.Uuid
+  sourceType          ResolutionSourceType
+  // Loose reference (no FK) — this row can point at either
+  // GovernmentContractEvent or CongressionalTransactionEvent depending on
+  // sourceType, which Postgres/Prisma can't express as a single typed FK.
+  sourceRecordId      String                 @db.Uuid
+  rawName             String
+  suggestedCompanyId  String?                @db.Uuid
+  suggestedConfidence Decimal?               @db.Decimal(3, 2)
+  status              ResolutionReviewStatus @default(PENDING)
+  resolvedCompanyId   String?                @db.Uuid
+  notes               String?
+  createdAt           DateTime               @default(now())
+  resolvedAt          DateTime?
+
+  suggestedCompany Company? @relation("SuggestedCompany", fields: [suggestedCompanyId], references: [id])
+  resolvedCompany  Company? @relation("ResolvedCompany", fields: [resolvedCompanyId], references: [id])
+
+  @@unique([sourceType, sourceRecordId])
+  @@index([status])
+}
+
+enum ContractRecordType {
+  NEW_AWARD
+  MODIFICATION
+  DE_OBLIGATION
+  CORRECTION
+}
+
+model GovernmentContractEvent {
+  id                   String             @id @default(uuid()) @db.Uuid
+  externalId           String // USAspending generated_unique_award_id
+  modificationNumber   String?
+  recipientLegalName   String
+  parentRecipientName  String?
+  awardingAgency       String
+  description          String?
+  awardType            String
+  recordType           ContractRecordType
+  actionDate           DateTime           @db.Date
+  startDate            DateTime?          @db.Date
+  endDate              DateTime?          @db.Date
+  currentAwardAmount   Decimal?           @db.Decimal(20, 2)
+  newlyObligatedAmount Decimal?           @db.Decimal(20, 2)
+  potentialAwardAmount Decimal?           @db.Decimal(20, 2)
+
+  resolvedCompanyId    String?  @db.Uuid
+  resolutionMethod     String?
+  resolutionConfidence Decimal? @db.Decimal(3, 2)
+
+  sourceUrl      String?
+  sourceName     String   @default("usaspending")
+  firstSeenAt    DateTime @default(now())
+  lastUpdatedAt  DateTime @updatedAt
+  parsingVersion Int      @default(1)
+  rawPayload     Json?
+
+  resolvedCompany Company? @relation(fields: [resolvedCompanyId], references: [id])
+
+  @@unique([externalId, modificationNumber])
+  @@index([resolvedCompanyId, actionDate])
+  @@index([actionDate])
+}
+
+enum InsiderRelationshipCategory {
+  DIRECTOR
+  OFFICER
+  TEN_PERCENT_OWNER
+  OTHER
+}
+
+enum InsiderTransactionClassification {
+  OPEN_MARKET_PURCHASE
+  OPEN_MARKET_SALE
+  OPTION_EXERCISE
+  AWARD_OR_GRANT
+  GIFT
+  TAX_WITHHOLDING
+  AUTOMATIC_OR_PLANNED
+  OTHER
+}
+
+// One row per transaction line item within a Form 3/4/4A/5/5A filing — a
+// single filing (accessionNumber) commonly reports several transactions.
+model InsiderTransactionEvent {
+  id         String @id @default(uuid()) @db.Uuid
+  issuerCik  String
+  issuerName String
+
+  reportingPersonName  String
+  reportingPersonTitle String?
+  relationshipCategory InsiderRelationshipCategory
+
+  transactionDate DateTime                         @db.Date
+  filingDate      DateTime                         @db.Date
+  transactionCode String // raw Form 4 code — "P", "S", "A", "M", "G", "F", …
+  classification  InsiderTransactionClassification
+  isPurchase      Boolean? // null when the code isn't a buy/sell (e.g. a grant)
+
+  shares              Decimal? @db.Decimal(20, 4)
+  pricePerShare       Decimal? @db.Decimal(20, 4)
+  estimatedTotalValue Decimal? @db.Decimal(24, 2)
+  ownershipType       String // "D" direct / "I" indirect
+  sharesOwnedAfter    Decimal? @db.Decimal(20, 4)
+  is10b51Plan         Boolean  @default(false)
+  isAmendment         Boolean  @default(false)
+
+  resolvedCompanyId String? @db.Uuid // resolved via issuerCik — see CIK-based resolution, near-certain when set
+
+  accessionNumber String
+  lineIndex       Int // position within the filing's transaction list — dedup key component, since one filing has many lines
+  filingUrl       String
+
+  sourceName     String   @default("sec_edgar")
+  firstSeenAt    DateTime @default(now())
+  lastUpdatedAt  DateTime @updatedAt
+  parsingVersion Int      @default(1)
+  rawPayload     Json?
+
+  resolvedCompany Company? @relation(fields: [resolvedCompanyId], references: [id])
+
+  @@unique([accessionNumber, lineIndex])
+  @@index([resolvedCompanyId, transactionDate])
+  @@index([issuerCik, transactionDate])
+}
+
+enum CongressChamber {
+  HOUSE
+  SENATE
+}
+
+enum CongressOwner {
+  SELF
+  SPOUSE
+  DEPENDENT
+  JOINT
+  UNKNOWN
+}
+
+enum CongressTransactionType {
+  PURCHASE
+  SALE
+  EXCHANGE
+  UNKNOWN
+}
+
+// sourceName/isLiveOfficialSource exist specifically so the UI can never
+// silently present manual-import or sample-fixture rows as live official
+// disclosures — see this feature's congressional provider doc comment.
+model CongressionalTransactionEvent {
+  id             String          @id @default(uuid()) @db.Uuid
+  politicianName String
+  chamber        CongressChamber
+  state          String?
+  party          String?
+  owner          CongressOwner   @default(UNKNOWN)
+
+  assetNameDisclosed   String
+  resolvedCompanyId    String?  @db.Uuid
+  resolutionMethod     String?
+  resolutionConfidence Decimal? @db.Decimal(3, 2)
+
+  transactionType     CongressTransactionType
+  transactionDate     DateTime                @db.Date
+  filingDate          DateTime                @db.Date
+  disclosureDelayDays Int
+
+  reportedRangeMin       Decimal? @db.Decimal(20, 2)
+  reportedRangeMax       Decimal? @db.Decimal(20, 2)
+  estimatedRangeMidpoint Decimal? @db.Decimal(20, 2)
+
+  filingUrl            String?
+  externalId           String // id from the source file/import — dedup key component
+  sourceName           String // "house_official" | "senate_official" | "manual_import" | "sample_fixture"
+  isLiveOfficialSource Boolean @default(false)
+
+  firstSeenAt    DateTime @default(now())
+  lastUpdatedAt  DateTime @updatedAt
+  parsingVersion Int      @default(1)
+  rawPayload     Json?
+
+  resolvedCompany Company? @relation(fields: [resolvedCompanyId], references: [id])
+
+  @@unique([sourceName, externalId])
+  @@index([resolvedCompanyId, transactionDate])
+}
+
+enum IngestionSource {
+  SEC_INSIDER
+  USASPENDING
+  CONGRESS_HOUSE
+  CONGRESS_SENATE
+  MARKET_PRICE
+  ENTITY_RESOLUTION
+  SIGNAL_SCORE
+}
+
+enum IngestionRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  PARTIAL
+}
+
+model SourceIngestionRun {
+  id          String             @id @default(uuid()) @db.Uuid
+  source      IngestionSource
+  startedAt   DateTime           @default(now())
+  completedAt DateTime?
+  status      IngestionRunStatus @default(RUNNING)
+
+  recordsFetched       Int     @default(0)
+  recordsInserted      Int     @default(0)
+  recordsUpdated       Int     @default(0)
+  recordsSkipped       Int     @default(0)
+  parsingFailures      Int     @default(0)
+  rateLimitFailures    Int     @default(0)
+  lastSuccessfulCursor String?
+  errorSummary         String?
+
+  errors SourceIngestionError[]
+
+  @@index([source, startedAt])
+}
+
+model SourceIngestionError {
+  id        String   @id @default(uuid()) @db.Uuid
+  runId     String   @db.Uuid
+  recordId  String?
+  errorType String
+  message   String
+  createdAt DateTime @default(now())
+
+  run SourceIngestionRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+}
+
+// One row per (company, window, computedAt) — a point-in-time Evidence
+// Score. Kept even after recomputation (never updated in place) so Phase
+// 3's "how did prior signals perform" evaluation has real history to
+// measure against, not just the current score.
+model SignalSnapshot {
+  id         String   @id @default(uuid()) @db.Uuid
+  companyId  String   @db.Uuid
+  windowDays Int
+  computedAt DateTime @default(now())
+
+  totalScore              Int
+  insiderScore            Int
+  governmentContractScore Int
+  congressScore           Int
+  convergenceBonus        Int
+  confidence              Decimal  @db.Decimal(3, 2)
+  categoriesMatched       Int
+  explanations            String[]
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, windowDays, computedAt])
+  @@index([windowDays, totalScore])
 }
