@@ -3,7 +3,13 @@ import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { recordProviderCall } from "@/lib/provider-log";
 import type { FinancialStatementSummary, MetricsProvider } from "@/shared/contracts/metrics-provider";
 
-const SEC_USER_AGENT = "StockLens research@stocklens.app";
+// Read directly from process.env rather than importing @/lib/env: that
+// module eagerly validates the *entire* env schema (including DATABASE_URL
+// and friends) on import, which would force every lightweight unit test of
+// this file (mocks fetch, never touches a database) to also satisfy the
+// full DB env schema just to read one optional string — same class of
+// problem already hit and fixed for prisma-service (see provider-log.ts).
+const SEC_USER_AGENT = process.env.SEC_EDGAR_USER_AGENT || "StockLens research@stocklens.app";
 
 // XBRL tag names vary across companies for the same real-world concept
 // (e.g. revenue reporting changed with ASC 606 adoption). Try each

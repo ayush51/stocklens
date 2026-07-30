@@ -2,7 +2,9 @@ import { AppError } from "@/lib/errors";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import type { FilingsProvider, FilingSummary } from "@/shared/contracts/filings-provider";
 
-const SEC_USER_AGENT = "StockLens research@stocklens.app";
+// Read directly from process.env rather than importing @/lib/env — see
+// edgar-xbrl/index.ts's SEC_USER_AGENT comment for why.
+const SEC_USER_AGENT = process.env.SEC_EDGAR_USER_AGENT || "StockLens research@stocklens.app";
 
 interface EdgarSubmissionsResponse {
   filings: {

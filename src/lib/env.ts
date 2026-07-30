@@ -67,6 +67,14 @@ const envSchema = z.object({
   // fail-closed unavailable provider. Get a free-tier key at
   // https://aistudio.google.com/apikey.
   GEMINI_API_KEY: z.string().min(1).optional(),
+
+  // SEC requires every EDGAR request to identify a real contact (see
+  // https://www.sec.gov/os/webmaster-faq#developers) — SEC actively blocks
+  // User-Agents it judges non-compliant. Every EDGAR-calling provider in
+  // this app (filings, XBRL financials, ticker resolution, Signal
+  // Convergence's insider-transaction provider) reads this one value, so
+  // updating the real contact never requires a code change.
+  SEC_EDGAR_USER_AGENT: z.string().min(1).default("StockLens research@stocklens.app"),
 });
 
 export type Env = z.infer<typeof envSchema>;

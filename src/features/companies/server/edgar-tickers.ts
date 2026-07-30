@@ -2,10 +2,11 @@ import { AppError } from "@/lib/errors";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 // SEC requires every request to identify a contact — see
-// https://www.sec.gov/os/webmaster-faq#developers. Replace with a real
-// contact before any meaningful production traffic; SEC actively blocks
-// User-Agents it judges non-compliant.
-const SEC_USER_AGENT = "StockLens research@stocklens.app";
+// https://www.sec.gov/os/webmaster-faq#developers. Configurable via
+// SEC_EDGAR_USER_AGENT (see src/lib/env.ts) without a code change; read
+// directly from process.env here rather than importing @/lib/env — see
+// edgar-xbrl/index.ts's SEC_USER_AGENT comment for why.
+const SEC_USER_AGENT = process.env.SEC_EDGAR_USER_AGENT || "StockLens research@stocklens.app";
 
 interface EdgarTickerEntry {
   cik_str: number;
