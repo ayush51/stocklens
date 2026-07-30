@@ -44,7 +44,8 @@ export default async function PortfoliosPage() {
               </div>
               {portfolio.lastSyncedAt ? (
                 <p className="text-muted-foreground text-sm">
-                  Last synced {portfolio.lastSyncedAt.toLocaleString()}
+                  Portfolio data was last synchronized through a read-only Robinhood MCP session at{" "}
+                  {portfolio.lastSyncedAt.toLocaleString()}.
                 </p>
               ) : null}
             </div>
