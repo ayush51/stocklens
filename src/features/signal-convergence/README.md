@@ -1,0 +1,101 @@
+# signal-convergence
+
+Research tool that surfaces companies where government contract awards, SEC insider transactions, and congressional trade disclosures appear together in the same time window. See the in-app **Methodology** tab (`/signal-convergence/methodology`) for the user-facing explanation of the scoring model and its limitations — this doc is the engineering-facing version.
+
+**Not investment advice.** A high Evidence Score means multiple public sources point at the same company in the same window — it is not a rating, not a return prediction, and not evidence of access to non-public information.
+
+## Architecture
+
+Provider-interface pattern, same as every other external data source in this app (`src/shared/contracts/`):
+
+| Contract | Provider | Status |
+|---|---|---|
+| `insider-transactions-provider.ts` | `providers/sec-insider` | **Real** — SEC EDGAR Forms 3/4/4-A/5/5-A, ownership XML parsed with `fast-xml-parser` |
+| `government-contracts-provider.ts` | `providers/usaspending` | **Real** — USAspending.gov `/search/spending_by_award/` + `/transactions/` |
+| `congressional-transactions-provider.ts` | `providers/congress` | **Not live** — `ManualCongressImportProvider` (real CSV import) + a clearly-labeled sample fixture. See "Congressional data" below. |
+| Market data | reuses `@/features/market-data`'s existing Finnhub provider | **Real** — no new integration |
+
+`PublicCompany`/`MarketPriceSnapshot` from a typical spec for this kind of feature are **not** new tables — the existing `Company` and `PriceSnapshot` models already cover that ground and are reused directly.
+
+### Data flow
+
+1. **Ingestion** (`server/ingestion.ts`) fetches from a provider, resolves each event to a `Company` (via `server/entity-resolution.ts`), and upserts into `GovernmentContractEvent`/`InsiderTransactionEvent`/`CongressionalTransactionEvent`. Every run is tracked in `SourceIngestionRun`/`SourceIngestionError` — no silent failures.
+2. **Scoring** (`lib/scoring.ts`) is pure and stateless: given a company's events in a window, it returns an Evidence Score (0–100) with per-component breakdown and real explanations. `server/queries.ts` computes this fresh per request (this app's whole data volume is small enough that this is fast) and writes a `SignalSnapshot` row as a side effect, which is what will feed Phase 3's historical-performance view.
+3. **UI** (`components/`, `src/app/(app)/signal-convergence/`) reads the query layer — no business logic in components.
+
+## Entity resolution
+
+Government contracts and congressional disclosures report a company by **name**, not a ticker. `server/entity-resolution.ts`:
+
+- `resolveCompanyByCik` — exact, since Form 3/4/5 filings always carry the issuer's real CIK.
+- `resolveCompanyByName` — tries exact `Company.name`, a verified `CompanyAlias`, an unverified `CompanyAlias`, then a normalized-name match (`lib/normalize-company-name.ts` strips legal suffixes/punctuation). Returns `null` below `AUTO_ACCEPT_CONFIDENCE` (0.85) rather than forcing a match.
+- Anything that doesn't resolve confidently lands in `EntityResolutionReview` (queue), visible on the **Data Health** tab. Confirming a review also writes a verified `CompanyAlias`, so the same name resolves automatically on every future run.
+
+## Environment variables
+
+Add to `.env` (see `.env.example` for the full block):
+
+```bash
+SEC_EDGAR_USER_AGENT="Your App research@yourdomain.com"   # required by SEC's fair-access rules
+CRON_SECRET="<random string>"                              # also set in Vercel project settings — enables the cron trigger
+```
+
+No new API key is required for USAspending (public, unauthenticated) or the market-data reuse (uses the existing `FINNHUB_API_KEY`).
+
+## Running ingestion locally
+
+```bash
+npx tsx -r dotenv/config -r tsconfig-paths/register - <<'EOF'
+import { ingestAllSignalSources } from "@/features/signal-convergence/server/ingestion";
+ingestAllSignalSources().then((r) => console.log(r));
+EOF
+```
+
+Or, once signed in, click **Refresh now** on `/signal-convergence` — same code path (`server/actions.ts#triggerManualSignalRefresh`).
+
+**On the very first run**, `ingestAllSignalSources()` has no prior successful run to compute an incremental `since` from, so it falls back to a 90-day lookback per source. A true one-time full historical backfill (what was actually run to seed this feature's real data) calls `ingestInsiderTransactions()`/`ingestGovernmentContracts()` directly with no `since` at all — expect this to take a while (SEC EDGAR rate-limits aggressively enough in practice that ~30 companies' full filing histories took on the order of 10+ minutes even with retry-with-backoff).
+
+## Refresh schedule
+
+This app has no background-job/scheduler system (confirmed: no Inngest, no queue — every other feature uses on-demand DB-first caching). Vercel Cron (`vercel.json`, `src/app/api/cron/signal-convergence/route.ts`) is the zero-new-dependency option, since Vercel is this app's actual deploy target. Currently configured for once daily (`0 6 * * *`) — Vercel Cron schedules are static config, not env-var-configurable at runtime, which is a real platform constraint, not an oversight.
+
+## How to manually import congressional data
+
+House/Senate disclosure sites have no stable, developer-friendly API, and this feature does not scrape past access controls or rate limits — see the Methodology tab for the full reasoning. Real congressional data only ever enters this app through:
+
+```ts
+import { importCongressionalCsv } from "@/features/signal-convergence/server/import-congress";
+await importCongressionalCsv(csvText);
+```
+
+Expected CSV columns: `politicianName,chamber,state,party,owner,assetNameDisclosed,transactionType,transactionDate,filingDate,reportedRange,filingUrl,externalId`. `chamber` is `HOUSE`/`SENATE`; `owner` is `SELF`/`SPOUSE`/`DEPENDENT`/`JOINT`/`UNKNOWN`; `transactionType` is `PURCHASE`/`SALE`/`EXCHANGE`/`UNKNOWN`; dates are `YYYY-MM-DD`; `reportedRange` is a real disclosure bucket string like `"$1,001 - $15,000"` (parsed by `lib/parse-amount-range.ts`); `externalId` must be unique per source row (it's the dedup key). Every row is validated — a bad row is skipped and reported, not silently dropped or left to crash the whole import.
+
+For UI-driven demo/dev data without a real CSV, `providers/congress/sample-fixture.ts` has two clearly-fake rows. It is never wired into the real ingestion path — `sourceName`/`isLiveOfficialSource` are threaded through every record specifically so the UI can never present it as live.
+
+## How to review unresolved mappings
+
+`/signal-convergence/data-health` lists every `PENDING` `EntityResolutionReview` row with its suggested match (if any) and confidence. **Confirm** links it to the suggested company and writes a verified `CompanyAlias` (teaches the system that name going forward). **Reject** marks it closed with no link. There's no free-text "pick a different company" UI in Phase 1 — to link a name to a company other than what was suggested, reject the review and add the alias directly via `prismaService.companyAlias.create(...)`.
+
+## Score methodology
+
+See the in-app Methodology tab for the user-facing explanation, or `lib/scoring.ts`'s own doc comments for the exact weights and rationale. Short version: insider evidence (max 35, open-market purchases only), government-contract evidence (max 30, new awards/funded modifications only — never a de-obligation or $0 correction), congressional evidence (max 20, purchases only, penalized for late disclosure), convergence bonus (max 15, scaled by underlying signal strength, not a flat bonus for merely touching 2+ categories). Recency decay and confidence penalties apply throughout.
+
+## Replacing a provider
+
+Every source sits behind an interface in `src/shared/contracts/`. To replace USAspending, write a new module implementing `GovernmentContractsProvider` and swap the import in `server/ingestion.ts` — scoring, entity resolution, and the UI never change. Same pattern for insider transactions or congressional data (see the adapter-point doc comment on `CongressionalTransactionsProvider`).
+
+## Running tests
+
+```bash
+npx vitest run src/features/signal-convergence
+```
+
+Unit tests (pure logic, no live calls): insider classification, contract-action classification, company-name normalization, amount-range parsing, manual-CSV validation, scoring (recency decay, confidence penalties, the spec's own worked-example shape). Integration tests (real Supabase Postgres, real fixture data, no live external APIs — same reasoning as `src/lib/db/rls.test.ts`): entity resolution against real `Company` rows already in the database.
+
+## Known limitations (Phase 1)
+
+- **Congressional data is not live** — this is Phase 2 as originally scoped, gated on either an authorized third-party provider or confirming a permitted official retrieval method. Never silently presented as current; every congressional event and the Data Health tab carry an explicit source-kind label.
+- **Persistent 429s after retry exhaustion aren't separately counted** in `SourceIngestionRun.rateLimitFailures` — they fold into `parsingFailures`/are simply missing from the result. Real (rare: ~14 out of ~5500 filings in the initial production seed), and logged individually via `logger.warn`, just not split out in the run-level summary yet.
+- **The candidate table's client-side filters are a real subset**, not the spec's full exhaustive list: search, minimum score, minimum confidence, and category (via the Venn diagram) are implemented; sector filtering, purchase-only filters, and a custom date-range picker are not yet wired up.
+- **The entity-resolution review UI only offers the system's own suggestion** — no free-text company search to pick a different match (see "How to review unresolved mappings" above).
+- **No Phase 3 evaluation view yet** — `SignalSnapshot` rows accumulate as a side effect of normal usage, but there's no UI showing "how did prior signals perform" yet.

@@ -30,3 +30,7 @@ Feature-based architecture — see [`docs/phase-0/03-folder-structure.md`](./doc
 ## Security
 
 The Robinhood brokerage integration is **read-only, permanently, enforced at the type level** (no write method exists on the sync provider interface) — see [`docs/phase-0/09-security-model.md`](./docs/phase-0/09-security-model.md) and [`ROBINHOOD_MCP_SECURITY_PLAN.md`](./ROBINHOOD_MCP_SECURITY_PLAN.md).
+
+## Signal Convergence
+
+Research tool that cross-references government contract awards, SEC insider transactions, and congressional trade disclosures — see [`src/features/signal-convergence/README.md`](./src/features/signal-convergence/README.md) for architecture, providers, environment variables, and known Phase 1 limitations. Not investment advice — see the in-app Methodology tab.
