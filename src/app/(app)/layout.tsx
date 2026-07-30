@@ -10,15 +10,12 @@ import { ChatWidget } from "@/features/assistant/components/chat-widget";
 import { DisclaimerFooter } from "@/shared/components/disclaimer-footer";
 import { Button } from "@/components/ui/button";
 
-// Phase 2 features land under these paths (docs/phase-0/06-routes.md); the
-// shell links to them now so the nav structure is visible. /alerts is still
-// a real "not built yet" page (see src/features/alerts/README.md) —
-// everything else here is a fully implemented route.
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/portfolios", label: "Portfolios" },
   { href: "/theses", label: "Theses" },
   { href: "/earnings", label: "Earnings" },
+  { href: "/signal-convergence", label: "Signal Convergence" },
   { href: "/scenarios", label: "Scenarios" },
   { href: "/journal", label: "Journal" },
   { href: "/imports", label: "Imports" },

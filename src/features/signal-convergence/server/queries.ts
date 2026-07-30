@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { prismaService } from "@/lib/db/prisma-service";
+import { getMarketDataProvider } from "@/features/market-data/server/get-provider";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import { computeEvidenceScore, type ScoreResult } from "@/features/signal-convergence/lib/scoring";
 
 export type SignalWindow = 7 | 30 | 90;
@@ -186,6 +188,107 @@ export interface SignalConvergenceSummary {
   companiesWithTwoCategories: number;
   companiesWithThreeCategories: number;
   newSignalsToday: number;
+}
+
+export interface CompanySignalDetail {
+  companyId: string;
+  ticker: string;
+  name: string;
+  score: ScoreResult;
+  insiderEvents: Awaited<ReturnType<typeof prisma.insiderTransactionEvent.findMany>>;
+  contractEvents: Awaited<ReturnType<typeof prisma.governmentContractEvent.findMany>>;
+  congressEvents: Awaited<ReturnType<typeof prisma.congressionalTransactionEvent.findMany>>;
+}
+
+/** Full timeline (not just score-qualifying events) so the detail panel can show everything that happened, not just what scored. */
+export async function getCompanySignalDetail(
+  ticker: string,
+  window: SignalWindow,
+  now: Date = new Date(),
+): Promise<CompanySignalDetail | null> {
+  const company = await prisma.company.findFirst({ where: { ticker: ticker.toUpperCase() } });
+  if (!company) return null;
+
+  const since = windowStart(window, now);
+  const [insiderEvents, contractEvents, congressEvents] = await Promise.all([
+    prisma.insiderTransactionEvent.findMany({
+      where: { resolvedCompanyId: company.id },
+      orderBy: { transactionDate: "desc" },
+      take: 50,
+    }),
+    prisma.governmentContractEvent.findMany({
+      where: { resolvedCompanyId: company.id },
+      orderBy: { actionDate: "desc" },
+      take: 50,
+    }),
+    prisma.congressionalTransactionEvent.findMany({
+      where: { resolvedCompanyId: company.id },
+      orderBy: { transactionDate: "desc" },
+      take: 50,
+    }),
+  ]);
+
+  const score = computeEvidenceScore({
+    asOf: now,
+    insiderEvents: insiderEvents
+      .filter((e) => e.transactionDate >= since)
+      .map((e) => ({
+        reportingPersonName: e.reportingPersonName,
+        relationshipCategory: e.relationshipCategory,
+        classification: e.classification,
+        transactionDate: e.transactionDate.toISOString().slice(0, 10),
+        estimatedTotalValue: e.estimatedTotalValue ? Number(e.estimatedTotalValue) : null,
+      })),
+    contractEvents: contractEvents
+      .filter((e) => e.actionDate >= since)
+      .map((e) => ({
+        recordType: e.recordType,
+        actionDate: e.actionDate.toISOString().slice(0, 10),
+        newlyObligatedAmount: e.newlyObligatedAmount ? Number(e.newlyObligatedAmount) : null,
+        resolutionConfidence: e.resolutionConfidence ? Number(e.resolutionConfidence) : null,
+      })),
+    congressEvents: congressEvents
+      .filter((e) => e.transactionDate >= since)
+      .map((e) => ({
+        politicianName: e.politicianName,
+        transactionType: e.transactionType,
+        transactionDate: e.transactionDate.toISOString().slice(0, 10),
+        disclosureDelayDays: e.disclosureDelayDays,
+        resolutionConfidence: e.resolutionConfidence ? Number(e.resolutionConfidence) : null,
+      })),
+  });
+
+  return {
+    companyId: company.id,
+    ticker: company.ticker,
+    name: company.name,
+    score,
+    insiderEvents,
+    contractEvents,
+    congressEvents,
+  };
+}
+
+export interface CandidatePriceInfo {
+  price: string | null;
+  isDelayed: boolean;
+}
+
+/**
+ * Reuses the existing market-data provider (Finnhub, or the fail-closed
+ * unavailable stub) rather than a new price integration — that provider
+ * already has its own proven rate-limit pacing (see its own rate-limit
+ * comment), so calling it per-ticker here needs no new pacing logic.
+ * Bounded to whatever's actually on the candidate list (typically a
+ * couple dozen companies at most), not the whole market.
+ */
+export async function getPricesForCandidates(tickers: string[]): Promise<Map<string, CandidatePriceInfo>> {
+  const provider = getMarketDataProvider();
+  const entries = await mapWithConcurrency(tickers, 6, async (ticker) => {
+    const quote = await provider.getQuote(ticker);
+    return [ticker, { price: quote?.price ?? null, isDelayed: quote?.isDelayed ?? true }] as const;
+  });
+  return new Map(entries);
 }
 
 export async function getSignalConvergenceSummary(

@@ -291,11 +291,45 @@ export async function ingestGovernmentContracts(opts?: { since?: Date }) {
   });
 }
 
+const FALLBACK_INITIAL_LOOKBACK_DAYS = 90;
+
+/**
+ * "Prefer incremental requests for recent data rather than repeatedly
+ * downloading the entire dataset" (this feature's own spec) — a manual
+ * refresh or cron tick defaults to only what's new since the last
+ * successful run for that specific source, not a full historical re-pull
+ * every time. Without this, a routine refresh would re-fetch and
+ * re-parse every recent filing for every tracked company on every click,
+ * which is both wasteful and, at real scale, slow enough to risk timing
+ * out as a serverless function. A source with no prior successful run
+ * (first-ever deployment) falls back to a bounded 90-day lookback rather
+ * than either "everything ever" or "nothing" — pass an explicit `since`
+ * (or omit it and call ingestInsiderTransactions/ingestGovernmentContracts
+ * directly) for a genuine one-time full historical backfill.
+ */
 export async function ingestAllSignalSources(opts?: { since?: Date }) {
   logger.info("signal_convergence_ingestion_started");
+
+  async function resolveSince(source: "SEC_INSIDER" | "USASPENDING"): Promise<Date> {
+    if (opts?.since) return opts.since;
+    const lastRun = await prismaService.sourceIngestionRun.findFirst({
+      where: { source, status: { in: ["SUCCEEDED", "PARTIAL"] } },
+      orderBy: { completedAt: "desc" },
+      select: { completedAt: true },
+    });
+    return (
+      lastRun?.completedAt ?? new Date(Date.now() - FALLBACK_INITIAL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
+    );
+  }
+
+  const [insiderSince, contractsSince] = await Promise.all([
+    resolveSince("SEC_INSIDER"),
+    resolveSince("USASPENDING"),
+  ]);
+
   const [insiderRun, contractsRun] = await Promise.all([
-    ingestInsiderTransactions(opts),
-    ingestGovernmentContracts(opts),
+    ingestInsiderTransactions({ since: insiderSince }),
+    ingestGovernmentContracts({ since: contractsSince }),
   ]);
   logger.info("signal_convergence_ingestion_completed", {
     insiderStatus: insiderRun.status,
