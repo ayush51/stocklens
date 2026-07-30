@@ -1,7 +1,23 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { PortfolioSummary } from "@/features/portfolios/server/queries";
+import type { PortfolioAggregate } from "@/features/portfolios/server/aggregate";
 import { formatMoney, formatPercent, gainLossClassName } from "@/features/portfolios/lib/format";
+
+// Accepts a single portfolio's summary (PortfolioSummary) or the
+// cross-portfolio rollup (DashboardSummary) — both are structurally a
+// superset of the aggregate fields this card actually renders.
+type PortfolioSummaryCardData = Pick<
+  PortfolioAggregate,
+  | "investedCapital"
+  | "estimatedMarketValue"
+  | "isPartial"
+  | "totalUnrealizedGainLoss"
+  | "totalUnrealizedGainLossPct"
+  | "totalDailyGainLoss"
+  | "totalRealizedGainLoss"
+  | "isRealizedGainLossPartial"
+  | "concentrationWarnings"
+>;
 
 function Stat({
   label,
@@ -29,7 +45,7 @@ function Stat({
   );
 }
 
-export function PortfolioSummaryCard({ portfolio }: { portfolio: PortfolioSummary }) {
+export function PortfolioSummaryCard({ portfolio }: { portfolio: PortfolioSummaryCardData }) {
   return (
     <Card>
       <CardHeader>

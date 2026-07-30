@@ -1,7 +1,12 @@
 import { forUser } from "@/lib/db/rls";
 import type { Quote } from "@/shared/contracts/market-data-provider";
 import { getMarketDataProvider } from "@/features/market-data/server/get-provider";
-import { aggregatePortfolio, type HoldingInput, type HoldingSummary } from "./aggregate";
+import {
+  aggregatePortfolio,
+  type HoldingInput,
+  type HoldingSummary,
+  type PortfolioAggregate,
+} from "./aggregate";
 
 export interface PortfolioSummary {
   id: string;
@@ -22,11 +27,16 @@ export interface PortfolioSummary {
   etfs: HoldingSummary[];
 }
 
+export interface DashboardSummary extends PortfolioAggregate {
+  portfolioCount: number;
+}
+
 /**
- * All of a user's portfolios with non-zero holdings, enriched with live
- * quotes where available and split into stocks/ETFs for display (see
- * Company.assetType — ETFs resolve with no SEC CIK, so they're bucketed
- * separately rather than mixed in with fundamentals-backed holdings).
+ * Shared fetch: every portfolio + non-zero holdings, live quotes for every
+ * held ticker across all of them, and per-portfolio HoldingInput[] ready
+ * for aggregatePortfolio(). Both a per-portfolio view (getPortfoliosForUser)
+ * and the cross-portfolio rollup (getDashboardSummary) build on this so the
+ * quote fetch and Transaction lookups only happen once.
  *
  * RLS-scoped: Portfolio/Holding are tenant data, so this must go through
  * forUser(), never the service client. Quotes come from
@@ -34,7 +44,7 @@ export interface PortfolioSummary {
  * fail-closed "unavailable" provider, and every holding degrades to its
  * cost-basis estimate rather than the page breaking.
  */
-export async function getPortfoliosForUser(userId: string): Promise<PortfolioSummary[]> {
+async function fetchHoldingsByPortfolio(userId: string) {
   const prisma = forUser(userId);
 
   const portfolios = await prisma.portfolio.findMany({
@@ -77,19 +87,37 @@ export async function getPortfoliosForUser(userId: string): Promise<PortfolioSum
     );
   }
 
-  return portfolios.map((portfolio) => {
-    const transactedCompanyIds = transactedCompanyIdsByPortfolio.get(portfolio.id) ?? new Set();
-    const holdingInputs: HoldingInput[] = portfolio.holdings.map((holding) => ({
-      companyId: holding.companyId,
-      ticker: holding.company.ticker,
-      name: holding.company.name,
-      assetType: holding.company.assetType,
-      quantity: holding.quantity,
-      averageCost: holding.averageCost,
-      realizedGainLoss: holding.realizedGainLoss,
-      realizedGainLossTracked: transactedCompanyIds.has(holding.companyId),
-    }));
+  const holdingInputsByPortfolioId = new Map<string, HoldingInput[]>(
+    portfolios.map((portfolio) => {
+      const transactedCompanyIds = transactedCompanyIdsByPortfolio.get(portfolio.id) ?? new Set();
+      const holdingInputs: HoldingInput[] = portfolio.holdings.map((holding) => ({
+        companyId: holding.companyId,
+        ticker: holding.company.ticker,
+        name: holding.company.name,
+        assetType: holding.company.assetType,
+        quantity: holding.quantity,
+        averageCost: holding.averageCost,
+        realizedGainLoss: holding.realizedGainLoss,
+        realizedGainLossTracked: transactedCompanyIds.has(holding.companyId),
+      }));
+      return [portfolio.id, holdingInputs];
+    }),
+  );
 
+  return { portfolios, holdingInputsByPortfolioId, quotes };
+}
+
+/**
+ * All of a user's portfolios with non-zero holdings, enriched with live
+ * quotes where available and split into stocks/ETFs for display (see
+ * Company.assetType — ETFs resolve with no SEC CIK, so they're bucketed
+ * separately rather than mixed in with fundamentals-backed holdings).
+ */
+export async function getPortfoliosForUser(userId: string): Promise<PortfolioSummary[]> {
+  const { portfolios, holdingInputsByPortfolioId, quotes } = await fetchHoldingsByPortfolio(userId);
+
+  return portfolios.map((portfolio) => {
+    const holdingInputs = holdingInputsByPortfolioId.get(portfolio.id) ?? [];
     const aggregate = aggregatePortfolio(holdingInputs, quotes);
 
     const stocks: HoldingSummary[] = [];
@@ -117,4 +145,18 @@ export async function getPortfoliosForUser(userId: string): Promise<PortfolioSum
       etfs,
     };
   });
+}
+
+/**
+ * Cross-portfolio rollup for the dashboard — merges every portfolio's
+ * holdings into a single aggregatePortfolio() call so invested capital,
+ * market value, gain/loss, and allocation reflect the user's whole book
+ * rather than one portfolio at a time (each portfolio's own allocationPct
+ * is only relative to itself, so those can't just be summed/concatenated).
+ */
+export async function getDashboardSummary(userId: string): Promise<DashboardSummary> {
+  const { portfolios, holdingInputsByPortfolioId, quotes } = await fetchHoldingsByPortfolio(userId);
+  const allHoldingInputs = portfolios.flatMap((p) => holdingInputsByPortfolioId.get(p.id) ?? []);
+  const aggregate = aggregatePortfolio(allHoldingInputs, quotes);
+  return { ...aggregate, portfolioCount: portfolios.length };
 }
