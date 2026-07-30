@@ -1,5 +1,4 @@
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
-import { mapWithConcurrency } from "@/lib/concurrency";
 import { logger } from "@/lib/logger";
 import { recordProviderCall } from "@/lib/provider-log";
 import { parseOwnershipXml } from "./parse-ownership-xml";
@@ -15,10 +14,49 @@ import type {
 // edgar-xbrl/index.ts's SEC_USER_AGENT comment for why.
 const SEC_USER_AGENT = process.env.SEC_EDGAR_USER_AGENT || "StockLens research@stocklens.app";
 const INSIDER_FORM_TYPES = new Set(["3", "4", "4/A", "5", "5/A"]);
-// SEC's documented fair-access limit is 10 req/sec; bounding concurrency
-// (rather than a fixed inter-request delay) keeps this well under that
-// while still fetching a company's recent filings in parallel.
-const MAX_CONCURRENT_FILING_FETCHES = 5;
+
+// Verified live (2026-07-30): a real ingestion run across ~30 companies'
+// filing histories hit 429s almost immediately at 5-way concurrency,
+// despite SEC's documented 10 req/sec fair-access limit — bounding
+// concurrency alone wasn't conservative enough in practice. Same lesson
+// already learned the hard way for Finnhub tonight (see that provider's
+// own rate-limit comment): a serialized dispatch queue with a real
+// minimum spacing between requests, shared across every call this
+// provider makes (not per-company), plus retry-with-backoff on 429,
+// rather than silently dropping a filing's data when SEC pushes back.
+const MIN_REQUEST_SPACING_MS = 300;
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 2000;
+let dispatchQueue: Promise<void> = Promise.resolve();
+
+function scheduleDispatch(): Promise<void> {
+  const previous = dispatchQueue;
+  let release!: () => void;
+  dispatchQueue = new Promise((resolve) => {
+    release = resolve;
+  });
+  return previous.then(async () => {
+    await new Promise((resolve) => setTimeout(resolve, MIN_REQUEST_SPACING_MS));
+    release();
+  });
+}
+
+async function pacedFetch(url: string, timeoutMs: number): Promise<Response> {
+  let lastResponse: Response | null = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    await scheduleDispatch();
+    const response = await fetchWithTimeout(url, { headers: { "User-Agent": SEC_USER_AGENT } }, timeoutMs);
+    if (response.ok || response.status !== 429) return response;
+
+    lastResponse = response;
+    if (attempt < MAX_RETRIES) {
+      const delayMs = BASE_DELAY_MS * 2 ** attempt;
+      logger.warn("insider_rate_limited_retrying", { url, attempt: attempt + 1, delayMs });
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return lastResponse!;
+}
 
 interface EdgarSubmissionsResponse {
   filings: {
@@ -39,11 +77,7 @@ interface FilingRef {
 
 async function fetchSubmissions(cik: string): Promise<EdgarSubmissionsResponse | null> {
   const startedAt = Date.now();
-  const response = await fetchWithTimeout(
-    `https://data.sec.gov/submissions/CIK${cik}.json`,
-    { headers: { "User-Agent": SEC_USER_AGENT }, next: { revalidate: 60 * 60 } },
-    15_000,
-  );
+  const response = await pacedFetch(`https://data.sec.gov/submissions/CIK${cik}.json`, 15_000);
 
   if (!response.ok) {
     recordProviderCall({
@@ -89,11 +123,7 @@ async function fetchAndParseFiling(cik: string, filing: FilingRef): Promise<Insi
   const filingUrl = resolveRawXmlUrl(cikNoLeadingZeros, accessionNoDashes, filing.primaryDocument);
 
   const startedAt = Date.now();
-  const response = await fetchWithTimeout(
-    filingUrl,
-    { headers: { "User-Agent": SEC_USER_AGENT }, next: { revalidate: 60 * 60 * 24 } },
-    10_000,
-  );
+  const response = await pacedFetch(filingUrl, 10_000);
 
   if (!response.ok) {
     recordProviderCall({
@@ -156,10 +186,14 @@ export const secInsiderTransactionsProvider: InsiderTransactionsProvider = {
 
     if (filings.length === 0) return [];
 
-    const results = await mapWithConcurrency(filings, MAX_CONCURRENT_FILING_FETCHES, (filing) =>
-      fetchAndParseFiling(cik, filing),
-    );
-
-    return results.flat();
+    // Sequential, not mapWithConcurrency: every request already goes
+    // through the shared paced dispatch queue above, so parallelizing the
+    // await calls here would only add complexity without changing the
+    // real request rate.
+    const results: InsiderTransactionRecord[] = [];
+    for (const filing of filings) {
+      results.push(...(await fetchAndParseFiling(cik, filing)));
+    }
+    return results;
   },
 };

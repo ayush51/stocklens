@@ -68,6 +68,14 @@ const envSchema = z.object({
   // https://aistudio.google.com/apikey.
   GEMINI_API_KEY: z.string().min(1).optional(),
 
+  // Verifies that a request to /api/cron/* actually came from Vercel Cron
+  // and not an arbitrary caller — Vercel sends this as a Bearer token
+  // automatically once a cron job is configured in vercel.json. Optional:
+  // absent means the cron routes reject every request (fail closed), so a
+  // real refresh only ever happens through the authenticated manual
+  // "Refresh now" trigger until this is set.
+  CRON_SECRET: z.string().min(1).optional(),
+
   // SEC requires every EDGAR request to identify a real contact (see
   // https://www.sec.gov/os/webmaster-faq#developers) — SEC actively blocks
   // User-Agents it judges non-compliant. Every EDGAR-calling provider in

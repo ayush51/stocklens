@@ -45,13 +45,47 @@ interface TransactionsResponse {
   results: TransactionResult[];
 }
 
+// A full ingestion run makes many sequential calls here (up to 15 award
+// searches x 20 transaction fetches, per company, across every tracked
+// company) — a light minimum spacing plus retry-on-429 is cheap
+// insurance against the same rate-limit surprise already hit for real
+// with SEC EDGAR (see the sec-insider provider's own comment), even
+// though a single-recipient test against this API didn't surface one.
+const MIN_REQUEST_SPACING_MS = 150;
+const MAX_RETRIES = 2;
+const BASE_DELAY_MS = 1500;
+let dispatchQueue: Promise<void> = Promise.resolve();
+
+function scheduleDispatch(): Promise<void> {
+  const previous = dispatchQueue;
+  let release!: () => void;
+  dispatchQueue = new Promise((resolve) => {
+    release = resolve;
+  });
+  return previous.then(async () => {
+    await new Promise((resolve) => setTimeout(resolve, MIN_REQUEST_SPACING_MS));
+    release();
+  });
+}
+
+async function postWithRetry(path: string, body: unknown, timeoutMs: number): Promise<Response> {
+  let response: Response;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    await scheduleDispatch();
+    response = await fetchWithTimeout(
+      `${BASE_URL}${path}`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+      timeoutMs,
+    );
+    if (response.ok || response.status !== 429 || attempt === MAX_RETRIES) return response;
+    await new Promise((resolve) => setTimeout(resolve, BASE_DELAY_MS * 2 ** attempt));
+  }
+  throw new Error("unreachable"); // MAX_RETRIES >= 0 guarantees the loop above always returns
+}
+
 async function postJson<T>(path: string, body: unknown, timeoutMs = 15_000): Promise<T | null> {
   const startedAt = Date.now();
-  const response = await fetchWithTimeout(
-    `${BASE_URL}${path}`,
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
-    timeoutMs,
-  );
+  const response = await postWithRetry(path, body, timeoutMs);
 
   if (!response.ok) {
     recordProviderCall({

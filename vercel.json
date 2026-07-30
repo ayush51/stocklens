@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/signal-convergence",
+      "schedule": "0 6 * * *"
+    }
+  ]
+}
