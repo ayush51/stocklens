@@ -38,6 +38,17 @@ const envSchema = z.object({
   // the app. Get a free-tier key at https://finnhub.io/register.
   FINNHUB_API_KEY: z.string().min(1).optional(),
 
+  // Provider-level kill switch (instructions.md §13): lets Finnhub be
+  // disabled instantly during an incident (rate-limit abuse upstream,
+  // a data-quality concern, a cost/quota issue) without removing the
+  // actual API key — flipping this back on doesn't require re-entering a
+  // secret. Distinct from FINNHUB_API_KEY being absent, which is "never
+  // configured" rather than "temporarily disabled."
+  MARKET_DATA_PROVIDER_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
+
   // Kill switch for the Yahoo Finance chart-API fallback used by
   // getHistoricalPrices when Finnhub's own /stock/candle can't serve a
   // free-tier request. That endpoint is unofficial and undocumented (see
