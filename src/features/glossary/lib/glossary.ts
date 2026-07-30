@@ -57,6 +57,38 @@ export const GLOSSARY = {
     impact:
       "A price near the 52-week low can signal either a value opportunity or a deteriorating business — the reason behind the drop matters more than the number itself.",
   },
+  marketCap: {
+    term: "Market Cap",
+    definition: "Total value of all outstanding shares — share price times shares outstanding.",
+    impact:
+      "The standard measure of company size, used to compare a company against its own history or against peers. Doesn't account for debt, unlike enterprise value.",
+  },
+  enterpriseValue: {
+    term: "Enterprise Value (EV)",
+    definition:
+      "Market cap plus debt, minus cash — an estimate of what it would cost to acquire the whole company outright, debt included.",
+    impact:
+      "Two companies can have the same market cap but very different EV if one carries much more debt. EV is the more complete size measure for that reason, and is what EV/EBITDA and EV/Revenue are built on.",
+  },
+  evToEbitdaTtm: {
+    term: "EV/EBITDA (trailing)",
+    definition:
+      "Enterprise value divided by trailing-12-month EBITDA (earnings before interest, taxes, depreciation, and amortization).",
+    impact:
+      "A capital-structure-neutral alternative to P/E — useful for comparing companies with different debt loads. Lower generally means cheaper relative to cash-generating ability, but capital-intensive industries (utilities, telecom) normally trade at lower multiples than asset-light ones, so only compare within the same industry.",
+  },
+  priceToFcfTtm: {
+    term: "Price/FCF (trailing)",
+    definition: "Share price divided by trailing-12-month free cash flow per share.",
+    impact:
+      "Harder to game with accounting choices than P/E, since it's based on actual cash generated. A company trading at a much higher P/FCF than P/E may be reporting net income that isn't backed by real cash — worth a closer look.",
+  },
+  pegRatioTtm: {
+    term: "PEG Ratio (trailing)",
+    definition: "Trailing P/E divided by trailing EPS growth rate — a growth-adjusted P/E.",
+    impact:
+      "A rule-of-thumb popularized by Peter Lynch: PEG near 1 is considered fairly priced relative to growth, below 1 potentially undervalued, above 1 potentially overvalued relative to its own growth. Trailing growth isn't necessarily indicative of future growth, so treat this as one input, not a verdict.",
+  },
   operatingIncome: {
     term: "Operating Income",
     definition:

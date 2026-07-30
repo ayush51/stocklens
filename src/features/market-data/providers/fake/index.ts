@@ -89,6 +89,11 @@ const FIXTURES: Record<
       dividendYieldTtm: "0.31",
       week52High: "342.89",
       week52Low: "201.50",
+      marketCap: "3400000000000",
+      enterpriseValue: "3420000000000",
+      evToEbitdaTtm: "24.1",
+      priceToFcfTtm: "28.3",
+      pegRatioTtm: "2.1",
       asOf: "2026-07-27T12:00:00.000Z",
     },
     recommendations: [

@@ -3,6 +3,13 @@ import { TermTooltip } from "@/features/glossary/components/term-tooltip";
 import type { GlossaryTermKey } from "@/features/glossary/lib/glossary";
 import type { FundamentalRatios } from "@/shared/contracts/market-data-provider";
 
+const compactCurrencyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  notation: "compact",
+  maximumFractionDigits: 2,
+});
+
 const FIELDS: {
   key: keyof FundamentalRatios;
   label: string;
@@ -22,6 +29,12 @@ const FIELDS: {
     format: (v) => Number(v).toFixed(2),
   },
   { key: "priceToBook", label: "Price/Book", termKey: "priceToBook", format: (v) => Number(v).toFixed(2) },
+  {
+    key: "pegRatioTtm",
+    label: "PEG (trailing)",
+    termKey: "pegRatioTtm",
+    format: (v) => Number(v).toFixed(2),
+  },
   { key: "beta", label: "Beta", termKey: "beta", format: (v) => Number(v).toFixed(2) },
   {
     key: "dividendYieldTtm",
@@ -36,6 +49,30 @@ const FIELDS: {
     format: (v) => `$${Number(v).toFixed(2)}`,
   },
   { key: "week52Low", label: "52-week low", termKey: "week52Low", format: (v) => `$${Number(v).toFixed(2)}` },
+  {
+    key: "marketCap",
+    label: "Market cap",
+    termKey: "marketCap",
+    format: (v) => compactCurrencyFormatter.format(Number(v)),
+  },
+  {
+    key: "enterpriseValue",
+    label: "Enterprise value",
+    termKey: "enterpriseValue",
+    format: (v) => compactCurrencyFormatter.format(Number(v)),
+  },
+  {
+    key: "evToEbitdaTtm",
+    label: "EV/EBITDA (trailing)",
+    termKey: "evToEbitdaTtm",
+    format: (v) => Number(v).toFixed(2),
+  },
+  {
+    key: "priceToFcfTtm",
+    label: "Price/FCF (trailing)",
+    termKey: "priceToFcfTtm",
+    format: (v) => Number(v).toFixed(2),
+  },
 ];
 
 export function RatiosPanel({ ratios }: { ratios: FundamentalRatios }) {

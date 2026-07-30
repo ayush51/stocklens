@@ -104,6 +104,15 @@ export interface FundamentalRatios {
   dividendYieldTtm: string | null;
   week52High: string | null;
   week52Low: string | null;
+  /** Raw USD, not millions — converted from Finnhub's reported unit at the provider boundary. */
+  marketCap: string | null;
+  /** Raw USD. Market cap + debt - cash, as Finnhub computes it — not derived locally, since our own debt figures are deliberately not combined into one number (see FinancialStatementSummary's totalDebt comment). */
+  enterpriseValue: string | null;
+  /** Null (not fabricated) when Finnhub doesn't compute it for this company — e.g. negative/near-zero TTM EBITDA makes the ratio not meaningful. */
+  evToEbitdaTtm: string | null;
+  priceToFcfTtm: string | null;
+  /** Trailing P/E over trailing EPS growth — Finnhub's own computed figure. Null when trailing growth is negative/not meaningful. */
+  pegRatioTtm: string | null;
   asOf: string; // ISO 8601 — retrieval time, this is a snapshot of a slow-changing bundle
 }
 

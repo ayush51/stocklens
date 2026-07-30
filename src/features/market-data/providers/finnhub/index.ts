@@ -104,6 +104,14 @@ interface FinnhubMetricResponse {
     currentDividendYieldTTM?: number;
     "52WeekHigh"?: number;
     "52WeekLow"?: number;
+    // marketCapitalization/enterpriseValue verified live (2026-07-30) to be
+    // reported in millions of USD, not raw dollars (NVDA's marketCapitalization
+    // came back as 4752638, i.e. ~$4.75T at millions scale).
+    marketCapitalization?: number;
+    enterpriseValue?: number;
+    evEbitdaTTM?: number;
+    pfcfShareTTM?: number;
+    pegTTM?: number;
   };
 }
 
@@ -404,6 +412,8 @@ export function createFinnhubMarketDataProvider(
 
       const toStringOrNull = (value: number | undefined) =>
         typeof value === "number" ? String(value) : null;
+      const millionsToUsdOrNull = (value: number | undefined) =>
+        typeof value === "number" ? String(value * 1_000_000) : null;
 
       return {
         ticker,
@@ -414,6 +424,11 @@ export function createFinnhubMarketDataProvider(
         dividendYieldTtm: toStringOrNull(metric.currentDividendYieldTTM),
         week52High: toStringOrNull(metric["52WeekHigh"]),
         week52Low: toStringOrNull(metric["52WeekLow"]),
+        marketCap: millionsToUsdOrNull(metric.marketCapitalization),
+        enterpriseValue: millionsToUsdOrNull(metric.enterpriseValue),
+        evToEbitdaTtm: toStringOrNull(metric.evEbitdaTTM),
+        priceToFcfTtm: toStringOrNull(metric.pfcfShareTTM),
+        pegRatioTtm: toStringOrNull(metric.pegTTM),
         asOf: new Date().toISOString(),
       };
     },
