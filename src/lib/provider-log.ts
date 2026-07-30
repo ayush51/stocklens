@@ -1,7 +1,7 @@
 import { logger } from "@/lib/logger";
 
 export interface ProviderCallRecord {
-  provider: "finnhub" | "edgar-xbrl" | "yahoo";
+  provider: "finnhub" | "edgar-xbrl" | "yahoo" | "usaspending";
   operation: string;
   durationMs: number;
   status: "SUCCESS" | "ERROR";
