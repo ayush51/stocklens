@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { SignalCandidate, CandidatePriceInfo } from "@/features/signal-convergence/server/queries";
 
@@ -33,7 +34,14 @@ export function CandidateTable({
   const [search, setSearch] = useState("");
   const [minScore, setMinScore] = useState("");
   const [minConfidence, setMinConfidence] = useState("");
+  const [sector, setSector] = useState<string>("all");
+  const [purchaseOnly, setPurchaseOnly] = useState(false);
   const [page, setPage] = useState(1);
+
+  const sectors = useMemo(
+    () => Array.from(new Set(candidates.map((c) => c.sector).filter((s): s is string => !!s))).sort(),
+    [candidates],
+  );
 
   const filtered = useMemo(() => {
     const searchLower = search.trim().toLowerCase();
@@ -50,9 +58,14 @@ export function CandidateTable({
       }
       if (c.totalScore < minScoreNum) return false;
       if (c.confidence < minConfidenceNum) return false;
+      if (sector !== "all" && c.sector !== sector) return false;
+      // Excludes candidates whose only qualifying evidence is a
+      // government contract (awards aren't a "purchase") — requires at
+      // least one real insider or congressional purchase behind the score.
+      if (purchaseOnly && c.components.insider === 0 && c.components.congress === 0) return false;
       return true;
     });
-  }, [candidates, search, minScore, minConfidence]);
+  }, [candidates, search, minScore, minConfidence, sector, purchaseOnly]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -100,6 +113,40 @@ export function CandidateTable({
             className="w-32"
           />
         </div>
+        <div className="space-y-1">
+          <label className="text-muted-foreground text-xs">Sector</label>
+          <Select
+            value={sector}
+            onValueChange={(v) => {
+              if (!v) return;
+              setSector(v);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All sectors</SelectItem>
+              {sectors.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <label className="flex items-center gap-1.5 pb-1.5 text-sm">
+          <input
+            type="checkbox"
+            checked={purchaseOnly}
+            onChange={(e) => {
+              setPurchaseOnly(e.target.checked);
+              setPage(1);
+            }}
+          />
+          Purchase-only (exclude contract-only candidates)
+        </label>
         <p className="text-muted-foreground text-xs">
           {filtered.length} of {candidates.length} candidates
         </p>

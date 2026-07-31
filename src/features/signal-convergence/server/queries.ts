@@ -166,9 +166,14 @@ export async function getVennOverlapCounts(
   };
 
   for (const c of candidates) {
-    const hasInsider = c.insiderEventCount > 0;
-    const hasContracts = c.contractEventCount > 0;
-    const hasCongress = c.congressEventCount > 0;
+    // Scored (not raw event-count) presence — matches categoriesMatched's
+    // own definition exactly. A candidate with insider *sales* but no
+    // purchases has insiderEventCount > 0 yet a real insider score of 0
+    // (only purchases score), and must not show up as "has an insider
+    // signal" in the Venn just because unrelated activity was logged.
+    const hasInsider = c.components.insider > 0;
+    const hasContracts = c.components.governmentContracts > 0;
+    const hasCongress = c.components.congress > 0;
 
     if (hasInsider && hasContracts && hasCongress) counts.allThree += 1;
     else if (hasInsider && hasContracts) counts.insiderAndContracts += 1;

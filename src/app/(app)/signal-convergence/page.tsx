@@ -25,13 +25,15 @@ function parseWindow(value: string | undefined): SignalWindow {
 }
 
 function filterByCategory<
-  T extends { insiderEventCount: number; contractEventCount: number; congressEventCount: number },
+  T extends { components: { insider: number; governmentContracts: number; congress: number } },
 >(candidates: T[], category: VennCategory | undefined): T[] {
   if (!category) return candidates;
   return candidates.filter((c) => {
-    const i = c.insiderEventCount > 0;
-    const g = c.contractEventCount > 0;
-    const congress = c.congressEventCount > 0;
+    // Scored presence, matching getVennOverlapCounts exactly — see that
+    // function's own comment for why raw event counts would be wrong here.
+    const i = c.components.insider > 0;
+    const g = c.components.governmentContracts > 0;
+    const congress = c.components.congress > 0;
     switch (category) {
       case "insiderOnly":
         return i && !g && !congress;
