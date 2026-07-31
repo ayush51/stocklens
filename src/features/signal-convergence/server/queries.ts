@@ -3,8 +3,17 @@ import { prismaService } from "@/lib/db/prisma-service";
 import { getMarketDataProvider } from "@/features/market-data/server/get-provider";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { computeEvidenceScore, type ScoreResult } from "@/features/signal-convergence/lib/scoring";
+import {
+  resolveTimeframe,
+  type SignalWindow,
+  type SignalTimeframe,
+} from "@/features/signal-convergence/lib/timeframe";
 
-export type SignalWindow = 7 | 30 | 90;
+export type {
+  SignalWindow,
+  SignalDateRange,
+  SignalTimeframe,
+} from "@/features/signal-convergence/lib/timeframe";
 
 export interface SignalCandidate extends ScoreResult {
   companyId: string;
@@ -28,10 +37,6 @@ export interface VennOverlapCounts {
   none: number;
 }
 
-function windowStart(window: SignalWindow, now: Date): Date {
-  return new Date(now.getTime() - window * 24 * 60 * 60 * 1000);
-}
-
 /**
  * Computes scores fresh on every call rather than reading a cached
  * SignalSnapshot — this app's whole data volume (dozens of companies, a
@@ -43,21 +48,21 @@ function windowStart(window: SignalWindow, now: Date): Date {
  * a separate dedicated recomputation job.
  */
 export async function getSignalCandidates(
-  window: SignalWindow,
+  timeframe: SignalTimeframe,
   now: Date = new Date(),
 ): Promise<SignalCandidate[]> {
-  const since = windowStart(window, now);
+  const { since, asOf, windowDays } = resolveTimeframe(timeframe, now);
 
   const [companies, insiderEvents, contractEvents, congressEvents] = await Promise.all([
     prisma.company.findMany({ select: { id: true, ticker: true, name: true, sector: true } }),
     prisma.insiderTransactionEvent.findMany({
-      where: { resolvedCompanyId: { not: null }, transactionDate: { gte: since } },
+      where: { resolvedCompanyId: { not: null }, transactionDate: { gte: since, lte: asOf } },
     }),
     prisma.governmentContractEvent.findMany({
-      where: { resolvedCompanyId: { not: null }, actionDate: { gte: since } },
+      where: { resolvedCompanyId: { not: null }, actionDate: { gte: since, lte: asOf } },
     }),
     prisma.congressionalTransactionEvent.findMany({
-      where: { resolvedCompanyId: { not: null }, transactionDate: { gte: since } },
+      where: { resolvedCompanyId: { not: null }, transactionDate: { gte: since, lte: asOf } },
     }),
   ]);
 
@@ -78,7 +83,7 @@ export async function getSignalCandidates(
     }
 
     const result = computeEvidenceScore({
-      asOf: now,
+      asOf,
       insiderEvents: companyInsiderEvents.map((e) => ({
         reportingPersonName: e.reportingPersonName,
         relationshipCategory: e.relationshipCategory,
@@ -129,7 +134,7 @@ export async function getSignalCandidates(
       prismaService.signalSnapshot.create({
         data: {
           companyId: company.id,
-          windowDays: window,
+          windowDays,
           totalScore: result.totalScore,
           insiderScore: result.components.insider,
           governmentContractScore: result.components.governmentContracts,
@@ -149,10 +154,10 @@ export async function getSignalCandidates(
 }
 
 export async function getVennOverlapCounts(
-  window: SignalWindow,
+  timeframe: SignalTimeframe,
   now: Date = new Date(),
 ): Promise<VennOverlapCounts> {
-  const candidates = await getSignalCandidates(window, now);
+  const candidates = await getSignalCandidates(timeframe, now);
 
   const counts: VennOverlapCounts = {
     insiderOnly: 0,
@@ -214,7 +219,7 @@ export async function getCompanySignalDetail(
   const company = await prisma.company.findFirst({ where: { ticker: ticker.toUpperCase() } });
   if (!company) return null;
 
-  const since = windowStart(window, now);
+  const { since } = resolveTimeframe(window, now);
   const [insiderEvents, contractEvents, congressEvents] = await Promise.all([
     prisma.insiderTransactionEvent.findMany({
       where: { resolvedCompanyId: company.id },
@@ -297,10 +302,10 @@ export async function getPricesForCandidates(tickers: string[]): Promise<Map<str
 }
 
 export async function getSignalConvergenceSummary(
-  window: SignalWindow,
+  timeframe: SignalTimeframe,
   now: Date = new Date(),
 ): Promise<SignalConvergenceSummary> {
-  const candidates = await getSignalCandidates(window, now);
+  const candidates = await getSignalCandidates(timeframe, now);
   const todayStr = now.toISOString().slice(0, 10);
 
   return {

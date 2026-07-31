@@ -76,6 +76,10 @@ For UI-driven demo/dev data without a real CSV, `providers/congress/sample-fixtu
 
 `/signal-convergence/data-health` lists every `PENDING` `EntityResolutionReview` row with its suggested match (if any) and confidence, plus a dropdown of every tracked company. **Confirm** links it to whichever company is selected (the system's suggestion by default, or any other company picked from the dropdown) and writes a verified `CompanyAlias` (teaches the system that name going forward). **Reject** marks it closed with no link.
 
+## Custom date ranges
+
+The Overview page's window control offers the fixed 7/30/90-day buckets plus a "Custom range" option (`?from=YYYY-MM-DD&to=YYYY-MM-DD`, replacing `?window=`). `lib/timeframe.ts#resolveTimeframe` is the single place both forms get normalized into `{ since, asOf, windowDays }`: a fixed window's `asOf` is always real "now" (unchanged behavior), while a custom range's `asOf` is its own `to` date — recency decay and "is this evidence still fresh" only make sense relative to the end of the window actually being evaluated, not real now, which matters once a range is fully in the past. `windowDays` (a real day-count for a custom range, not a fabricated bucket) is what `SignalSnapshot` stores, which is exactly the mechanism Phase 3's evaluation view reads.
+
 ## Score methodology
 
 See the in-app Methodology tab for the user-facing explanation, or `lib/scoring.ts`'s own doc comments for the exact weights and rationale. Short version: insider evidence (max 35, open-market purchases only), government-contract evidence (max 30, new awards/funded modifications only — never a de-obligation or $0 correction), congressional evidence (max 20, purchases only, penalized for late disclosure), convergence bonus (max 15, scaled by underlying signal strength, not a flat bonus for merely touching 2+ categories). Recency decay and confidence penalties apply throughout.
@@ -95,5 +99,5 @@ Unit tests (pure logic, no live calls): insider classification, contract-action 
 ## Known limitations (Phase 1)
 
 - **Congressional data is not live** — this is Phase 2 as originally scoped, gated on either an authorized third-party provider or confirming a permitted official retrieval method. Never silently presented as current; every congressional event and the Data Health tab carry an explicit source-kind label.
-- **The candidate table's client-side filters are a real subset**, not the spec's full exhaustive list: search, minimum score, minimum confidence, category (via the Venn diagram), sector, and purchase-only are implemented; a custom date-range picker is not yet wired up (only the fixed 7/30/90-day windows).
+- **The candidate table's client-side filters are a real subset**, not the spec's full exhaustive list: search, minimum score, minimum confidence, category (via the Venn diagram), sector, and purchase-only are implemented, alongside a server-side custom date-range window (see below).
 - **No Phase 3 evaluation view yet** — `SignalSnapshot` rows accumulate as a side effect of normal usage, but there's no UI showing "how did prior signals perform" yet.

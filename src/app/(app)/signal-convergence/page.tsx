@@ -7,6 +7,7 @@ import {
   getSignalConvergenceSummary,
   getPricesForCandidates,
   type SignalWindow,
+  type SignalTimeframe,
 } from "@/features/signal-convergence/server/queries";
 import { getDataHealthSnapshot } from "@/features/signal-convergence/server/data-health";
 import { PageHeader } from "@/shared/components/page-header";
@@ -22,6 +23,16 @@ import { RefreshSignalsButton } from "@/features/signal-convergence/components/r
 function parseWindow(value: string | undefined): SignalWindow {
   const n = Number(value);
   return n === 7 || n === 90 ? n : 30;
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseCustomRange(
+  from: string | undefined,
+  to: string | undefined,
+): { from: string; to: string } | null {
+  if (!from || !to || !DATE_RE.test(from) || !DATE_RE.test(to) || from > to) return null;
+  return { from, to };
 }
 
 function filterByCategory<
@@ -58,7 +69,7 @@ function filterByCategory<
 export default async function SignalConvergencePage({
   searchParams,
 }: {
-  searchParams: Promise<{ window?: string; category?: string }>;
+  searchParams: Promise<{ window?: string; category?: string; from?: string; to?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
@@ -66,11 +77,15 @@ export default async function SignalConvergencePage({
   const params = await searchParams;
   const window = parseWindow(params.window);
   const category = params.category as VennCategory | undefined;
+  const customRange = parseCustomRange(params.from, params.to);
+  const timeframe: SignalTimeframe = customRange
+    ? { from: new Date(`${customRange.from}T00:00:00Z`), to: new Date(`${customRange.to}T23:59:59Z`) }
+    : window;
 
   const [candidates, vennCounts, summary, health] = await Promise.all([
-    getSignalCandidates(window),
-    getVennOverlapCounts(window),
-    getSignalConvergenceSummary(window),
+    getSignalCandidates(timeframe),
+    getVennOverlapCounts(timeframe),
+    getSignalConvergenceSummary(timeframe),
     getDataHealthSnapshot(),
   ]);
 
@@ -94,7 +109,7 @@ export default async function SignalConvergencePage({
       <SignalTabs />
 
       <div className="flex items-center justify-between">
-        <WindowSelector current={window} />
+        <WindowSelector current={window} customRange={customRange} />
       </div>
 
       <SignalSummaryMetrics
