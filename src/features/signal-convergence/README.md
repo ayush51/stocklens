@@ -74,7 +74,7 @@ For UI-driven demo/dev data without a real CSV, `providers/congress/sample-fixtu
 
 ## How to review unresolved mappings
 
-`/signal-convergence/data-health` lists every `PENDING` `EntityResolutionReview` row with its suggested match (if any) and confidence. **Confirm** links it to the suggested company and writes a verified `CompanyAlias` (teaches the system that name going forward). **Reject** marks it closed with no link. There's no free-text "pick a different company" UI in Phase 1 — to link a name to a company other than what was suggested, reject the review and add the alias directly via `prismaService.companyAlias.create(...)`.
+`/signal-convergence/data-health` lists every `PENDING` `EntityResolutionReview` row with its suggested match (if any) and confidence, plus a dropdown of every tracked company. **Confirm** links it to whichever company is selected (the system's suggestion by default, or any other company picked from the dropdown) and writes a verified `CompanyAlias` (teaches the system that name going forward). **Reject** marks it closed with no link.
 
 ## Score methodology
 
@@ -97,5 +97,4 @@ Unit tests (pure logic, no live calls): insider classification, contract-action 
 - **Congressional data is not live** — this is Phase 2 as originally scoped, gated on either an authorized third-party provider or confirming a permitted official retrieval method. Never silently presented as current; every congressional event and the Data Health tab carry an explicit source-kind label.
 - **Persistent 429s after retry exhaustion aren't separately counted** in `SourceIngestionRun.rateLimitFailures` — they fold into `parsingFailures`/are simply missing from the result. Real (rare: ~14 out of ~5500 filings in the initial production seed), and logged individually via `logger.warn`, just not split out in the run-level summary yet.
 - **The candidate table's client-side filters are a real subset**, not the spec's full exhaustive list: search, minimum score, minimum confidence, category (via the Venn diagram), sector, and purchase-only are implemented; a custom date-range picker is not yet wired up (only the fixed 7/30/90-day windows).
-- **The entity-resolution review UI only offers the system's own suggestion** — no free-text company search to pick a different match (see "How to review unresolved mappings" above).
 - **No Phase 3 evaluation view yet** — `SignalSnapshot` rows accumulate as a side effect of normal usage, but there's no UI showing "how did prior signals perform" yet.

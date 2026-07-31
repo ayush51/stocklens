@@ -25,7 +25,7 @@ export default async function DataHealthPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
 
-  const [health, pendingReviews] = await Promise.all([
+  const [health, pendingReviews, companies] = await Promise.all([
     getDataHealthSnapshot(),
     prisma.entityResolutionReview.findMany({
       where: { status: "PENDING" },
@@ -33,6 +33,7 @@ export default async function DataHealthPage() {
       take: 50,
       include: { suggestedCompany: { select: { ticker: true, name: true } } },
     }),
+    prisma.company.findMany({ select: { id: true, ticker: true, name: true }, orderBy: { ticker: "asc" } }),
   ]);
 
   return (
@@ -108,6 +109,7 @@ export default async function DataHealthPage() {
               : null,
             suggestedConfidence: r.suggestedConfidence ? Number(r.suggestedConfidence) : null,
           }))}
+          companies={companies}
         />
       </div>
     </div>

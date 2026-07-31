@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   confirmEntityResolution,
   rejectEntityResolution,
@@ -21,23 +22,34 @@ export interface ReviewItem {
   suggestedConfidence: number | null;
 }
 
-/**
- * Confirm only offers the system's own suggestion, not a free-text
- * search across every company — a deliberate scope simplification given
- * this app's small company list; picking a different company than the
- * one suggested still works by rejecting here and adding a manual
- * CompanyAlias directly (see the Methodology tab).
- */
-export function ResolutionReviewList({ reviews }: { reviews: ReviewItem[] }) {
+export interface CompanyOption {
+  id: string;
+  ticker: string;
+  name: string;
+}
+
+export function ResolutionReviewList({
+  reviews,
+  companies,
+}: {
+  reviews: ReviewItem[];
+  companies: CompanyOption[];
+}) {
   const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
+  // Per-review manual override — starts unset so "Confirm" defaults to the
+  // system's own suggestion until the reviewer explicitly picks something
+  // else from the full company list.
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
 
   async function handleConfirm(review: ReviewItem) {
-    if (!review.suggestedCompanyId || !review.suggestedCompany) return;
+    const companyId = overrides[review.id] ?? review.suggestedCompanyId;
+    if (!companyId) return;
     setPendingId(review.id);
     try {
-      await confirmEntityResolution(review.id, review.suggestedCompanyId);
-      toast.success(`Linked "${review.rawName}" to ${review.suggestedCompany.ticker}`);
+      await confirmEntityResolution(review.id, companyId);
+      const linkedTo = companies.find((c) => c.id === companyId)?.ticker ?? review.suggestedCompany?.ticker;
+      toast.success(`Linked "${review.rawName}" to ${linkedTo}`);
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not confirm this mapping.");
@@ -65,43 +77,79 @@ export function ResolutionReviewList({ reviews }: { reviews: ReviewItem[] }) {
 
   return (
     <div className="space-y-2">
-      {reviews.map((review) => (
-        <Card key={review.id}>
-          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">{review.sourceType.replace(/_/g, " ")}</Badge>
-                <span className="text-sm font-medium">{review.rawName}</span>
+      {reviews.map((review) => {
+        const overrideId = overrides[review.id];
+        const canConfirm = !!(overrideId ?? review.suggestedCompanyId);
+        return (
+          <Card key={review.id}>
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{review.sourceType.replace(/_/g, " ")}</Badge>
+                  <span className="text-sm font-medium">{review.rawName}</span>
+                </div>
+                {review.suggestedCompany ? (
+                  <p className="text-muted-foreground text-xs">
+                    Suggested: {review.suggestedCompany.ticker} — {review.suggestedCompany.name}
+                    {review.suggestedConfidence !== null
+                      ? ` (${Math.round(review.suggestedConfidence * 100)}% confidence)`
+                      : ""}
+                  </p>
+                ) : (
+                  <p className="text-muted-foreground text-xs">No candidate match found.</p>
+                )}
               </div>
-              {review.suggestedCompany ? (
-                <p className="text-muted-foreground text-xs">
-                  Suggested: {review.suggestedCompany.ticker} — {review.suggestedCompany.name}
-                  {review.suggestedConfidence !== null
-                    ? ` (${Math.round(review.suggestedConfidence * 100)}% confidence)`
-                    : ""}
-                </p>
-              ) : (
-                <p className="text-muted-foreground text-xs">No candidate match found.</p>
-              )}
-            </div>
-            <div className="flex gap-2">
-              {review.suggestedCompany ? (
-                <Button size="sm" disabled={pendingId === review.id} onClick={() => handleConfirm(review)}>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={overrideId ?? "__suggested__"}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    setOverrides((prev) => {
+                      if (v === "__suggested__") {
+                        const next = { ...prev };
+                        delete next[review.id];
+                        return next;
+                      }
+                      return { ...prev, [review.id]: v };
+                    });
+                  }}
+                >
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Link to a company…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {review.suggestedCompany ? (
+                      <SelectItem value="__suggested__">
+                        Use suggestion ({review.suggestedCompany.ticker})
+                      </SelectItem>
+                    ) : null}
+                    {companies.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.ticker} — {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  disabled={pendingId === review.id || !canConfirm}
+                  onClick={() => handleConfirm(review)}
+                >
                   Confirm
                 </Button>
-              ) : null}
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={pendingId === review.id}
-                onClick={() => handleReject(review)}
-              >
-                Reject
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={pendingId === review.id}
+                  onClick={() => handleReject(review)}
+                >
+                  Reject
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }
