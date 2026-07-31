@@ -75,7 +75,9 @@ interface FilingRef {
   primaryDocument: string;
 }
 
-async function fetchSubmissions(cik: string): Promise<EdgarSubmissionsResponse | null> {
+async function fetchSubmissions(
+  cik: string,
+): Promise<{ data: EdgarSubmissionsResponse | null; rateLimited: boolean }> {
   const startedAt = Date.now();
   const response = await pacedFetch(`https://data.sec.gov/submissions/CIK${cik}.json`, 15_000);
 
@@ -88,7 +90,7 @@ async function fetchSubmissions(cik: string): Promise<EdgarSubmissionsResponse |
       errorCategory: `http_${response.status}`,
       rateLimited: response.status === 429,
     });
-    return null;
+    return { data: null, rateLimited: response.status === 429 };
   }
 
   recordProviderCall({
@@ -97,7 +99,7 @@ async function fetchSubmissions(cik: string): Promise<EdgarSubmissionsResponse |
     durationMs: Date.now() - startedAt,
     status: "SUCCESS",
   });
-  return response.json() as Promise<EdgarSubmissionsResponse>;
+  return { data: (await response.json()) as EdgarSubmissionsResponse, rateLimited: false };
 }
 
 /**
@@ -117,7 +119,10 @@ function resolveRawXmlUrl(
   return `https://www.sec.gov/Archives/edgar/data/${cikNoLeadingZeros}/${accessionNoDashes}/${filename}`;
 }
 
-async function fetchAndParseFiling(cik: string, filing: FilingRef): Promise<InsiderTransactionRecord[]> {
+async function fetchAndParseFiling(
+  cik: string,
+  filing: FilingRef,
+): Promise<{ records: InsiderTransactionRecord[]; rateLimited: boolean }> {
   const cikNoLeadingZeros = String(Number(cik));
   const accessionNoDashes = filing.accessionNumber.replace(/-/g, "");
   const filingUrl = resolveRawXmlUrl(cikNoLeadingZeros, accessionNoDashes, filing.primaryDocument);
@@ -139,7 +144,7 @@ async function fetchAndParseFiling(cik: string, filing: FilingRef): Promise<Insi
       accessionNumber: filing.accessionNumber,
       status: response.status,
     });
-    return [];
+    return { records: [], rateLimited: response.status === 429 };
   }
 
   const xml = await response.text();
@@ -151,25 +156,28 @@ async function fetchAndParseFiling(cik: string, filing: FilingRef): Promise<Insi
   });
 
   try {
-    return parseOwnershipXml(xml, {
-      accessionNumber: filing.accessionNumber,
-      filingDate: filing.filingDate,
-      filingUrl,
-    });
+    return {
+      records: parseOwnershipXml(xml, {
+        accessionNumber: filing.accessionNumber,
+        filingDate: filing.filingDate,
+        filingUrl,
+      }),
+      rateLimited: false,
+    };
   } catch (error) {
     logger.warn("insider_filing_parse_failed", {
       cik,
       accessionNumber: filing.accessionNumber,
       error: error instanceof Error ? error.message : String(error),
     });
-    return [];
+    return { records: [], rateLimited: false };
   }
 }
 
 export const secInsiderTransactionsProvider: InsiderTransactionsProvider = {
   async listTransactionsForIssuer(cik, opts) {
-    const submissions = await fetchSubmissions(cik);
-    if (!submissions) return [];
+    const { data: submissions, rateLimited: submissionsRateLimited } = await fetchSubmissions(cik);
+    if (!submissions) return { records: [], rateLimitFailures: submissionsRateLimited ? 1 : 0 };
 
     const { recent } = submissions.filings;
     const filings: FilingRef[] = [];
@@ -184,16 +192,19 @@ export const secInsiderTransactionsProvider: InsiderTransactionsProvider = {
       if (opts?.limit && filings.length >= opts.limit) break;
     }
 
-    if (filings.length === 0) return [];
+    if (filings.length === 0) return { records: [], rateLimitFailures: 0 };
 
     // Sequential, not mapWithConcurrency: every request already goes
     // through the shared paced dispatch queue above, so parallelizing the
     // await calls here would only add complexity without changing the
     // real request rate.
-    const results: InsiderTransactionRecord[] = [];
+    const records: InsiderTransactionRecord[] = [];
+    let rateLimitFailures = 0;
     for (const filing of filings) {
-      results.push(...(await fetchAndParseFiling(cik, filing)));
+      const result = await fetchAndParseFiling(cik, filing);
+      records.push(...result.records);
+      if (result.rateLimited) rateLimitFailures += 1;
     }
-    return results;
+    return { records, rateLimitFailures };
   },
 };

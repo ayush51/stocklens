@@ -83,7 +83,11 @@ async function postWithRetry(path: string, body: unknown, timeoutMs: number): Pr
   throw new Error("unreachable"); // MAX_RETRIES >= 0 guarantees the loop above always returns
 }
 
-async function postJson<T>(path: string, body: unknown, timeoutMs = 15_000): Promise<T | null> {
+async function postJson<T>(
+  path: string,
+  body: unknown,
+  timeoutMs = 15_000,
+): Promise<{ data: T | null; rateLimited: boolean }> {
   const startedAt = Date.now();
   const response = await postWithRetry(path, body, timeoutMs);
 
@@ -96,7 +100,7 @@ async function postJson<T>(path: string, body: unknown, timeoutMs = 15_000): Pro
       errorCategory: `http_${response.status}`,
       rateLimited: response.status === 429,
     });
-    return null;
+    return { data: null, rateLimited: response.status === 429 };
   }
 
   recordProviderCall({
@@ -105,11 +109,13 @@ async function postJson<T>(path: string, body: unknown, timeoutMs = 15_000): Pro
     durationMs: Date.now() - startedAt,
     status: "SUCCESS",
   });
-  return response.json() as Promise<T>;
+  return { data: (await response.json()) as T, rateLimited: false };
 }
 
-async function searchAwardsForRecipient(recipientName: string): Promise<SpendingByAwardResult[]> {
-  const data = await postJson<SpendingByAwardResponse>("/search/spending_by_award/", {
+async function searchAwardsForRecipient(
+  recipientName: string,
+): Promise<{ awards: SpendingByAwardResult[]; rateLimited: boolean }> {
+  const { data, rateLimited } = await postJson<SpendingByAwardResponse>("/search/spending_by_award/", {
     filters: {
       recipient_search_text: [recipientName],
       award_type_codes: CONTRACT_AWARD_TYPE_CODES,
@@ -136,22 +142,25 @@ async function searchAwardsForRecipient(recipientName: string): Promise<Spending
     order: "desc",
   });
 
-  return data?.results ?? [];
+  return { awards: data?.results ?? [], rateLimited };
 }
 
-async function fetchTransactionsForAward(awardId: string): Promise<TransactionResult[]> {
-  const data = await postJson<TransactionsResponse>("/transactions/", {
+async function fetchTransactionsForAward(
+  awardId: string,
+): Promise<{ transactions: TransactionResult[]; rateLimited: boolean }> {
+  const { data, rateLimited } = await postJson<TransactionsResponse>("/transactions/", {
     award_id: awardId,
     limit: MAX_TRANSACTIONS_PER_AWARD,
     page: 1,
   });
-  return data?.results ?? [];
+  return { transactions: data?.results ?? [], rateLimited };
 }
 
 export const usaSpendingContractsProvider: GovernmentContractsProvider = {
   async listRecentContractActionsForRecipient(recipientName, opts) {
-    const awards = await searchAwardsForRecipient(recipientName);
-    if (awards.length === 0) return [];
+    const { awards, rateLimited: searchRateLimited } = await searchAwardsForRecipient(recipientName);
+    let rateLimitFailures = searchRateLimited ? 1 : 0;
+    if (awards.length === 0) return { records: [], rateLimitFailures };
 
     const sinceDateStr = opts?.since?.toISOString().slice(0, 10) ?? null;
     const events: GovernmentContractEventRecord[] = [];
@@ -159,7 +168,9 @@ export const usaSpendingContractsProvider: GovernmentContractsProvider = {
     for (const award of awards) {
       let transactions: TransactionResult[];
       try {
-        transactions = await fetchTransactionsForAward(award.generated_internal_id);
+        const result = await fetchTransactionsForAward(award.generated_internal_id);
+        transactions = result.transactions;
+        if (result.rateLimited) rateLimitFailures += 1;
       } catch (error) {
         logger.warn("usaspending_transactions_fetch_failed", {
           awardId: award.generated_internal_id,
@@ -200,10 +211,10 @@ export const usaSpendingContractsProvider: GovernmentContractsProvider = {
           sourceUrl: `https://www.usaspending.gov/award/${award.generated_internal_id}`,
         });
 
-        if (opts?.limit && events.length >= opts.limit) return events;
+        if (opts?.limit && events.length >= opts.limit) return { records: events, rateLimitFailures };
       }
     }
 
-    return events;
+    return { records: events, rateLimitFailures };
   },
 };

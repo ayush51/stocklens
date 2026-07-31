@@ -60,21 +60,17 @@ export async function ingestInsiderTransactions(opts?: { since?: Date }) {
   let recordsInserted = 0;
   let recordsUpdated = 0;
   let parsingFailures = 0;
-  // A persistent 429 (after the provider's own retry-with-backoff is
-  // exhausted) currently folds into parsingFailures rather than a
-  // separate counter — both mean "this filing's data is missing," and
-  // the provider's own logger.warn calls (insider_filing_fetch_failed,
-  // insider_rate_limited_retrying) still distinguish the real cause for
-  // debugging even though this run-level summary doesn't split them out.
-  const rateLimitFailures = 0;
+  let rateLimitFailures = 0;
 
   for (const company of targets) {
     let records;
     try {
-      records = await secInsiderTransactionsProvider.listTransactionsForIssuer(company.cik!, {
+      const result = await secInsiderTransactionsProvider.listTransactionsForIssuer(company.cik!, {
         since: opts?.since,
         limit: 50,
       });
+      records = result.records;
+      rateLimitFailures += result.rateLimitFailures;
     } catch (error) {
       parsingFailures += 1;
       await recordError(
@@ -180,15 +176,17 @@ export async function ingestGovernmentContracts(opts?: { since?: Date }) {
   let recordsInserted = 0;
   let recordsUpdated = 0;
   let parsingFailures = 0;
-  const rateLimitFailures = 0;
+  let rateLimitFailures = 0;
 
   for (const company of targets) {
     let records;
     try {
-      records = await usaSpendingContractsProvider.listRecentContractActionsForRecipient(company.name, {
+      const result = await usaSpendingContractsProvider.listRecentContractActionsForRecipient(company.name, {
         since: opts?.since,
         limit: 50,
       });
+      records = result.records;
+      rateLimitFailures += result.rateLimitFailures;
     } catch (error) {
       parsingFailures += 1;
       await recordError(

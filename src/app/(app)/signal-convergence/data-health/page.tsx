@@ -78,6 +78,14 @@ export default async function DataHealthPage() {
                     </span>
                   </div>
                 ) : null}
+                {h.lastSuccessfulRun && h.lastSuccessfulRun.rateLimitFailures > 0 ? (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Rate-limited (last run)</span>
+                    <Badge variant="outline" className="text-amber-600">
+                      {h.lastSuccessfulRun.rateLimitFailures} skipped
+                    </Badge>
+                  </div>
+                ) : null}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Last attempted run</span>
                   <span>{h.lastAttemptedRun ? h.lastAttemptedRun.startedAt.toLocaleString() : "Never"}</span>

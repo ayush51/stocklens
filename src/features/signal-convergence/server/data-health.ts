@@ -2,7 +2,12 @@ import { prismaService } from "@/lib/db/prisma-service";
 
 export interface SourceHealthRow {
   source: string;
-  lastSuccessfulRun: { completedAt: Date; recordsFetched: number; recordsInserted: number } | null;
+  lastSuccessfulRun: {
+    completedAt: Date;
+    recordsFetched: number;
+    recordsInserted: number;
+    rateLimitFailures: number;
+  } | null;
   lastAttemptedRun: { startedAt: Date; status: string } | null;
   recentErrorCount: number;
   isStale: boolean;
@@ -23,7 +28,7 @@ export async function getDataHealthSnapshot(): Promise<SourceHealthRow[]> {
       prismaService.sourceIngestionRun.findFirst({
         where: { source: key, status: { in: ["SUCCEEDED", "PARTIAL"] } },
         orderBy: { completedAt: "desc" },
-        select: { completedAt: true, recordsFetched: true, recordsInserted: true },
+        select: { completedAt: true, recordsFetched: true, recordsInserted: true, rateLimitFailures: true },
       }),
       prismaService.sourceIngestionRun.findFirst({
         where: { source: key },
@@ -46,6 +51,7 @@ export async function getDataHealthSnapshot(): Promise<SourceHealthRow[]> {
             completedAt: lastSuccessful.completedAt,
             recordsFetched: lastSuccessful.recordsFetched,
             recordsInserted: lastSuccessful.recordsInserted,
+            rateLimitFailures: lastSuccessful.rateLimitFailures,
           }
         : null,
       lastAttemptedRun: lastAttempted
@@ -73,6 +79,7 @@ export async function getDataHealthSnapshot(): Promise<SourceHealthRow[]> {
           completedAt: latestCongressImport.firstSeenAt,
           recordsFetched: congressCount,
           recordsInserted: congressCount,
+          rateLimitFailures: 0,
         }
       : null,
     lastAttemptedRun: null,

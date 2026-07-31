@@ -43,6 +43,18 @@ export interface InsiderTransactionRecord {
   filingUrl: string;
 }
 
+export interface InsiderTransactionsListResult {
+  records: InsiderTransactionRecord[];
+  /**
+   * Filings that never got their data (submissions list or an individual
+   * ownership XML) because SEC EDGAR kept returning 429 through the
+   * provider's own retry-with-backoff — distinct from a parse error or
+   * malformed response, since the retry-exhausted case is external rate
+   * pressure, not a bug in this app's parsing.
+   */
+  rateLimitFailures: number;
+}
+
 export interface InsiderTransactionsProvider {
   /**
    * All Form 3/4/4-A/5/5-A transaction line items for one issuer, most
@@ -53,5 +65,5 @@ export interface InsiderTransactionsProvider {
   listTransactionsForIssuer(
     cik: string,
     opts?: { since?: Date; limit?: number },
-  ): Promise<InsiderTransactionRecord[]>;
+  ): Promise<InsiderTransactionsListResult>;
 }

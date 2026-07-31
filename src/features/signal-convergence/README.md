@@ -95,6 +95,5 @@ Unit tests (pure logic, no live calls): insider classification, contract-action 
 ## Known limitations (Phase 1)
 
 - **Congressional data is not live** — this is Phase 2 as originally scoped, gated on either an authorized third-party provider or confirming a permitted official retrieval method. Never silently presented as current; every congressional event and the Data Health tab carry an explicit source-kind label.
-- **Persistent 429s after retry exhaustion aren't separately counted** in `SourceIngestionRun.rateLimitFailures` — they fold into `parsingFailures`/are simply missing from the result. Real (rare: ~14 out of ~5500 filings in the initial production seed), and logged individually via `logger.warn`, just not split out in the run-level summary yet.
 - **The candidate table's client-side filters are a real subset**, not the spec's full exhaustive list: search, minimum score, minimum confidence, category (via the Venn diagram), sector, and purchase-only are implemented; a custom date-range picker is not yet wired up (only the fixed 7/30/90-day windows).
 - **No Phase 3 evaluation view yet** — `SignalSnapshot` rows accumulate as a side effect of normal usage, but there's no UI showing "how did prior signals perform" yet.

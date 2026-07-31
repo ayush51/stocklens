@@ -31,6 +31,16 @@ export interface GovernmentContractEventRecord {
   sourceUrl: string;
 }
 
+export interface GovernmentContractActionsListResult {
+  records: GovernmentContractEventRecord[];
+  /**
+   * Award searches or transaction fetches that never got their data
+   * because USAspending kept returning 429 through the provider's own
+   * retry-with-backoff — distinct from any other fetch failure.
+   */
+  rateLimitFailures: number;
+}
+
 export interface GovernmentContractsProvider {
   /**
    * Recent contract actions (new awards and modifications) for one
@@ -40,5 +50,5 @@ export interface GovernmentContractsProvider {
   listRecentContractActionsForRecipient(
     recipientName: string,
     opts?: { since?: Date; limit?: number },
-  ): Promise<GovernmentContractEventRecord[]>;
+  ): Promise<GovernmentContractActionsListResult>;
 }
