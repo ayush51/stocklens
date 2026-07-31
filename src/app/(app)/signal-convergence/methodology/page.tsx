@@ -91,10 +91,14 @@ export default async function MethodologyPage() {
         <CardContent className="space-y-2 text-sm">
           <p>
             House and Senate disclosure sites have no stable, developer-friendly API, and this app does not
-            scrape past access controls or rate limits. Congressional data here comes from a real CSV import
-            (see the import tool) or, for demonstration, a clearly-labeled sample fixture — never presented as
-            a live official feed. Check the Data Health tab and each event&apos;s source badge before treating
-            any congressional row as current.
+            scrape past access controls or rate limits. Re-checked directly against the live sites: the
+            community &quot;Stock Watcher&quot; projects developers used to rely on for this data are offline,
+            and the official Senate/House sites are either session-gated with redistribution-restricting terms
+            or PDF-only. A paid third-party API (e.g. QuiverQuant) exists but needs the account holder&apos;s
+            own subscription and key. Congressional data here comes from a real CSV import (see the import
+            tool) or, for demonstration, a clearly-labeled sample fixture — never presented as a live official
+            feed. Check the Data Health tab and each event&apos;s source badge before treating any
+            congressional row as current.
           </p>
         </CardContent>
       </Card>

@@ -61,7 +61,14 @@ This app has no background-job/scheduler system (confirmed: no Inngest, no queue
 
 ## How to manually import congressional data
 
-House/Senate disclosure sites have no stable, developer-friendly API, and this feature does not scrape past access controls or rate limits — see the Methodology tab for the full reasoning. Real congressional data only ever enters this app through:
+House/Senate disclosure sites have no stable, developer-friendly API, and this feature does not scrape past access controls or rate limits — see the Methodology tab for the full reasoning. Re-checked live (2026-07-31) for a compliant path to make this Phase 2 source real:
+
+- **House/Senate Stock Watcher** (the two community projects most third-party trackers historically built on) are dead — `housestockwatcher.com`/`senatestockwatcher.com` no longer resolve, and their backing S3 bucket (`house-stock-watcher-data.s3-us-west-2.amazonaws.com`) now returns `AccessDenied`. Not usable at any confidence level, live or cached.
+- **efdsearch.senate.gov** (the official Senate site) is up, but its search requires accepting a click-wrap Terms of Use before every session and has no public JSON endpoint — only a session-gated HTML/PDF search UI. Its terms restrict bulk redistribution/data-mining use of the disclosures obtained through it, which is exactly why this feature doesn't scrape it (not just a technical gap).
+- **disclosures-clerk.house.gov** (the official House site) publishes PDF filings only — no structured data to parse without OCR, which this feature doesn't do.
+- **QuiverQuant's congressional-trading API** (`api.quiverquant.com`) is live and real, but requires a paid subscription and an API key under the user's own account — a cost and account-creation decision only the user can make, not something to sign up for or pay for unilaterally.
+
+Net: no free, unauthenticated, ToS-compliant live source exists today. The path to making this real stays either (a) the user provisioning a paid API key like QuiverQuant's, or (b) manual CSV import, which is what's implemented now. Real congressional data only ever enters this app through:
 
 ```ts
 import { importCongressionalCsv } from "@/features/signal-convergence/server/import-congress";
