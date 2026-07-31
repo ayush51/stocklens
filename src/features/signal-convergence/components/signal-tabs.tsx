@@ -10,6 +10,7 @@ const TABS = [
   { href: "/signal-convergence/government-contracts", label: "Government Contracts" },
   { href: "/signal-convergence/congressional-trades", label: "Congressional Trades" },
   { href: "/signal-convergence/insider-trades", label: "Insider Trades" },
+  { href: "/signal-convergence/performance", label: "Performance" },
   { href: "/signal-convergence/data-health", label: "Data Health" },
   { href: "/signal-convergence/methodology", label: "Methodology" },
 ];

@@ -76,6 +76,17 @@ For UI-driven demo/dev data without a real CSV, `providers/congress/sample-fixtu
 
 `/signal-convergence/data-health` lists every `PENDING` `EntityResolutionReview` row with its suggested match (if any) and confidence, plus a dropdown of every tracked company. **Confirm** links it to whichever company is selected (the system's suggestion by default, or any other company picked from the dropdown) and writes a verified `CompanyAlias` (teaches the system that name going forward). **Reject** marks it closed with no link.
 
+## Performance evaluation (Phase 3)
+
+`/signal-convergence/performance` answers "how did prior Evidence Scores line up with what actually happened to price afterward" using only real data already on file — no backtest assumptions, no simulated prices. `server/evaluation.ts#getSignalPerformanceHistory`:
+
+1. Reads real `SignalSnapshot` rows (the same rows `getSignalCandidates` already writes as a side effect of normal Overview-page usage) that are at least 14 days old (`EVALUATION_HORIZON_DAYS`) — a forward return can't be measured before that much time has actually passed.
+2. Dedupes to one snapshot per (company, window, calendar day) — repeated page loads write a new row every time, and evaluating every one would over-weight companies whose pages just got refreshed more often, not companies with more actual signal days.
+3. Fetches real historical closes via the existing market-data provider's `getHistoricalPrices` (Finnhub, with the Yahoo Finance fallback already used by the price-history chart — see that provider's own comment) for the snapshot date and 14 days later. A missing bar (market holiday, no data yet) leaves that price `null` — never interpolated or guessed.
+4. Buckets by score range (0-29 / 30-59 / 60-100, matching the candidate table's own badge thresholds) and reports an average forward return only once at least 3 evaluable snapshots exist in that bucket (`lib/evaluation.ts#MIN_SAMPLE_SIZE_FOR_AVERAGE`) — otherwise it honestly shows "Insufficient data" rather than a 1-sample average dressed up as a statistic.
+
+Verified live (2026-07-31) end-to-end with a temporary backdated snapshot: real AAPL entry/exit closes 14 days apart via the Yahoo fallback (Finnhub 403'd as expected on the free tier), a correct forward-return calculation, and the bucket correctly suppressing its average at n=1. This is a small, continuously-growing dataset from real usage, not a validated backtest — the page says so explicitly.
+
 ## Custom date ranges
 
 The Overview page's window control offers the fixed 7/30/90-day buckets plus a "Custom range" option (`?from=YYYY-MM-DD&to=YYYY-MM-DD`, replacing `?window=`). `lib/timeframe.ts#resolveTimeframe` is the single place both forms get normalized into `{ since, asOf, windowDays }`: a fixed window's `asOf` is always real "now" (unchanged behavior), while a custom range's `asOf` is its own `to` date — recency decay and "is this evidence still fresh" only make sense relative to the end of the window actually being evaluated, not real now, which matters once a range is fully in the past. `windowDays` (a real day-count for a custom range, not a fabricated bucket) is what `SignalSnapshot` stores, which is exactly the mechanism Phase 3's evaluation view reads.
@@ -100,4 +111,3 @@ Unit tests (pure logic, no live calls): insider classification, contract-action 
 
 - **Congressional data is not live** — this is Phase 2 as originally scoped, gated on either an authorized third-party provider or confirming a permitted official retrieval method. Never silently presented as current; every congressional event and the Data Health tab carry an explicit source-kind label.
 - **The candidate table's client-side filters are a real subset**, not the spec's full exhaustive list: search, minimum score, minimum confidence, category (via the Venn diagram), sector, and purchase-only are implemented, alongside a server-side custom date-range window (see below).
-- **No Phase 3 evaluation view yet** — `SignalSnapshot` rows accumulate as a side effect of normal usage, but there's no UI showing "how did prior signals perform" yet.
