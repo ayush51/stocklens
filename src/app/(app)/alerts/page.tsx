@@ -38,7 +38,7 @@ export default async function AlertsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Alerts"
-        description="Price, earnings, and thesis-review alerts for your holdings — checked on demand (see below), not automatically yet."
+        description="Price, earnings, and thesis-review alerts for your holdings — checked automatically once a day on weekday market close, and any time you click Check now below."
       />
       <CreateRuleForm
         companies={holdings.map((h) => ({

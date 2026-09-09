@@ -36,7 +36,8 @@ export function CheckNowButton() {
           <BellRingIcon className="size-4" /> {loading ? "Checking…" : "Check alerts now"}
         </Button>
         <p className="text-muted-foreground text-xs">
-          Checks against live data right now — there&apos;s no background job running these automatically yet.
+          Checks against live data right now — rules also get an automatic daily check on weekday market
+          close, so this is for whenever you don&apos;t want to wait for that.
         </p>
       </div>
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
