@@ -8,6 +8,7 @@ import { forUser } from "@/lib/db/rls";
 import { AppError } from "@/lib/errors";
 import { getOrResolveCompanyByTicker } from "@/features/companies/server/queries";
 import { recomputeHolding } from "@/features/portfolios/server/service";
+import { getPortfoliosForUser } from "@/features/portfolios/server/queries";
 import { createPortfolioSchema } from "@/features/portfolios/validation/portfolio";
 import { createTransactionSchema } from "@/features/portfolios/validation/transaction";
 
@@ -85,4 +86,20 @@ export async function createManualTransaction(input: unknown): Promise<void> {
   await recomputeHolding(prisma, data.portfolioId, company.id);
 
   revalidatePath("/portfolios");
+}
+
+/**
+ * Forces a live quote refetch for every ticker the user currently holds,
+ * bypassing QuoteCache's normal 10-minute freshness window (see
+ * getCachedQuotes's own doc comment). QuoteCache is a single global,
+ * ticker-keyed table — not scoped to this user or this page — so the
+ * fresh prices this writes are immediately visible to /dashboard and any
+ * other page reading the same tickers, with no separate propagation step.
+ */
+export async function refreshPortfolioQuotes(): Promise<void> {
+  const authUser = await requireUser();
+  await getPortfoliosForUser(authUser.id, { forceRefreshQuotes: true });
+
+  revalidatePath("/portfolios");
+  revalidatePath("/dashboard");
 }

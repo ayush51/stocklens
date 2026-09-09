@@ -1,6 +1,6 @@
 import { forUser } from "@/lib/db/rls";
-import type { Quote } from "@/shared/contracts/market-data-provider";
 import { getMarketDataProvider } from "@/features/market-data/server/get-provider";
+import { getCachedQuotes } from "@/features/market-data/server/quote-cache";
 import {
   aggregatePortfolio,
   type HoldingInput,
@@ -40,11 +40,15 @@ export interface DashboardSummary extends PortfolioAggregate {
  *
  * RLS-scoped: Portfolio/Holding are tenant data, so this must go through
  * forUser(), never the service client. Quotes come from
- * getMarketDataProvider() — if FINNHUB_API_KEY isn't configured that's the
- * fail-closed "unavailable" provider, and every holding degrades to its
- * cost-basis estimate rather than the page breaking.
+ * getCachedQuotes() (backed by getMarketDataProvider() underneath) — if
+ * FINNHUB_API_KEY isn't configured that's the fail-closed "unavailable"
+ * provider, and every holding degrades to its cost-basis estimate rather
+ * than the page breaking. A held portfolio easily has 30+ distinct
+ * tickers, and fetching all of them live on every page load would take
+ * 30+ seconds serialized through Finnhub's real rate limit — the cache
+ * turns a repeat load into a single DB query for the common case.
  */
-async function fetchHoldingsByPortfolio(userId: string) {
+async function fetchHoldingsByPortfolio(userId: string, opts?: { forceRefreshQuotes?: boolean }) {
   const prisma = forUser(userId);
 
   const portfolios = await prisma.portfolio.findMany({
@@ -59,14 +63,11 @@ async function fetchHoldingsByPortfolio(userId: string) {
     orderBy: { createdAt: "asc" },
   });
 
-  const allTickers = new Set(portfolios.flatMap((p) => p.holdings.map((h) => h.company.ticker)));
+  const allTickers = Array.from(new Set(portfolios.flatMap((p) => p.holdings.map((h) => h.company.ticker))));
   const provider = getMarketDataProvider();
-  const quoteEntries = await Promise.all(
-    Array.from(allTickers).map(async (ticker) => [ticker, await provider.getQuote(ticker)] as const),
-  );
-  const quotes = new Map<string, Quote>(
-    quoteEntries.filter((entry): entry is [string, Quote] => entry[1] !== null),
-  );
+  const quotes = await getCachedQuotes(allTickers, provider, {
+    forceRefresh: opts?.forceRefreshQuotes,
+  });
 
   // realizedGainLoss is only a real derived figure for holdings with actual
   // Transaction rows behind them (see recomputeHolding) — a Robinhood MCP
@@ -113,8 +114,11 @@ async function fetchHoldingsByPortfolio(userId: string) {
  * Company.assetType — ETFs resolve with no SEC CIK, so they're bucketed
  * separately rather than mixed in with fundamentals-backed holdings).
  */
-export async function getPortfoliosForUser(userId: string): Promise<PortfolioSummary[]> {
-  const { portfolios, holdingInputsByPortfolioId, quotes } = await fetchHoldingsByPortfolio(userId);
+export async function getPortfoliosForUser(
+  userId: string,
+  opts?: { forceRefreshQuotes?: boolean },
+): Promise<PortfolioSummary[]> {
+  const { portfolios, holdingInputsByPortfolioId, quotes } = await fetchHoldingsByPortfolio(userId, opts);
 
   return portfolios.map((portfolio) => {
     const holdingInputs = holdingInputsByPortfolioId.get(portfolio.id) ?? [];

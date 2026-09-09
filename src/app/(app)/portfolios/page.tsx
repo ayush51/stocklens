@@ -7,6 +7,7 @@ import { PortfolioSummaryCard } from "@/features/portfolios/components/portfolio
 import { AllocationChart } from "@/features/portfolios/components/allocation-chart";
 import { CreatePortfolioDialog } from "@/features/portfolios/components/create-portfolio-dialog";
 import { AddTransactionDialog } from "@/features/portfolios/components/add-transaction-dialog";
+import { RefreshQuotesButton } from "@/features/portfolios/components/refresh-quotes-button";
 import { PageHeader } from "@/shared/components/page-header";
 import { EmptyState } from "@/shared/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +25,12 @@ export default async function PortfoliosPage() {
       <PageHeader
         title="Portfolios"
         description="Robinhood holdings come in via an MCP-connected chat session sync — never automatic, never stores your credentials. Other accounts can be tracked by adding a portfolio and entering transactions manually."
-        actions={<CreatePortfolioDialog />}
+        actions={
+          <>
+            <RefreshQuotesButton />
+            <CreatePortfolioDialog />
+          </>
+        }
       />
 
       {portfolios.length === 0 ? (

@@ -256,6 +256,28 @@ model Company {
   signalSnapshots                SignalSnapshot[]
 }
 
+// Global, ticker-keyed cache of the last live quote fetched from
+// getMarketDataProvider() — not scoped to a company row (some callers,
+// e.g. signal-convergence's price lookups, only have a bare ticker) and
+// not scoped to a workspace (a quote for AAPL is the same fact for every
+// user, same reasoning as Company/PriceSnapshot already being global
+// reference data). Exists specifically to stop pages that request many
+// tickers at once (a real Robinhood-synced portfolio easily holds 30+)
+// from paying Finnhub's real rate-limit pacing (~1/sec, serialized
+// across the whole app — see the finnhub provider's own comment) on
+// every single page load.
+model QuoteCache {
+  ticker        String   @id
+  price         Decimal  @db.Decimal(20, 4)
+  previousClose Decimal? @db.Decimal(20, 4)
+  currency      String
+  marketTimestamp DateTime
+  retrievedAt   DateTime
+  isDelayed     Boolean
+  source        String
+  updatedAt     DateTime @updatedAt
+}
+
 model PriceSnapshot {
   id        String   @id @default(uuid()) @db.Uuid
   companyId String   @db.Uuid
