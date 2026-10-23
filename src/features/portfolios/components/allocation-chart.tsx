@@ -6,7 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import type { HoldingSummary } from "@/features/portfolios/server/aggregate";
 
-const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
+const COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "oklch(0.68 0.14 200)",
+  "oklch(0.70 0.17 130)",
+  "oklch(0.68 0.2 350)",
+];
 
 const OTHER_COLOR = "var(--muted-foreground)";
 const MAX_SLICES = 8;

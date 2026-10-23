@@ -5,14 +5,10 @@ import Link from "next/link";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { HoldingSummary } from "@/features/portfolios/server/aggregate";
-import {
-  formatMoney,
-  formatPercent,
-  formatPlainPercent,
-  gainLossClassName,
-} from "@/features/portfolios/lib/format";
+import { formatMoney, formatPercent, formatPlainPercent } from "@/features/portfolios/lib/format";
 
 type SortKey =
   | "ticker"
@@ -28,10 +24,10 @@ type TagFilter = "stale" | "unavailable" | "concentrated";
 
 const COLUMNS: { key: SortKey; label: string; align: "left" | "right" }[] = [
   { key: "ticker", label: "Ticker", align: "left" },
+  { key: "averageCost", label: "Avg cost", align: "right" },
   { key: "price", label: "Price", align: "right" },
   { key: "dailyGainLossPct", label: "Day", align: "right" },
   { key: "quantity", label: "Quantity", align: "right" },
-  { key: "averageCost", label: "Avg cost", align: "right" },
   { key: "marketValue", label: "Market value", align: "right" },
   { key: "unrealizedGainLossPct", label: "Unrealized G/L", align: "right" },
   { key: "allocationPct", label: "Allocation", align: "right" },
@@ -41,6 +37,24 @@ function numeric(value: string | null): number {
   if (value === null) return Number.NEGATIVE_INFINITY;
   const n = Number(value);
   return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY;
+}
+
+function gainPillClassName(value: string | null): string {
+  if (value === null) return "bg-muted text-muted-foreground";
+  const num = Number(value);
+  if (num > 0) return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
+  if (num < 0) return "bg-rose-500/15 text-rose-700 dark:text-rose-300";
+  return "bg-muted text-muted-foreground";
+}
+
+function GainPill({ value, children }: { value: string | null; children: React.ReactNode }) {
+  return (
+    <span
+      className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium tabular-nums ${gainPillClassName(value)}`}
+    >
+      {children}
+    </span>
+  );
 }
 
 function tagsFor(row: HoldingSummary): TagFilter[] {
@@ -54,6 +68,7 @@ function tagsFor(row: HoldingSummary): TagFilter[] {
 export function HoldingsTable({ rows }: { rows: HoldingSummary[] }) {
   const [sortKey, setSortKey] = useState<SortKey>("allocationPct");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [query, setQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState<Set<TagFilter>>(new Set());
 
   const availableFilters = useMemo(() => {
@@ -83,10 +98,12 @@ export function HoldingsTable({ rows }: { rows: HoldingSummary[] }) {
   }
 
   const visibleRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const searched = q ? rows.filter((row) => row.ticker.toLowerCase().includes(q)) : rows;
     const filtered =
       activeFilters.size === 0
-        ? rows
-        : rows.filter((row) => tagsFor(row).some((tag) => activeFilters.has(tag)));
+        ? searched
+        : searched.filter((row) => tagsFor(row).some((tag) => activeFilters.has(tag)));
 
     const sorted = [...filtered].sort((a, b) => {
       const dir = sortDir === "asc" ? 1 : -1;
@@ -94,10 +111,22 @@ export function HoldingsTable({ rows }: { rows: HoldingSummary[] }) {
       return (numeric(a[sortKey]) - numeric(b[sortKey])) * dir;
     });
     return sorted;
-  }, [rows, activeFilters, sortKey, sortDir]);
+  }, [rows, query, activeFilters, sortKey, sortDir]);
 
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search ticker…"
+          aria-label="Search holdings by ticker"
+          className="h-8 w-44"
+        />
+        <span className="text-muted-foreground text-xs">
+          {visibleRows.length} of {rows.length}
+        </span>
+      </div>
       {availableFilters.size > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-muted-foreground text-xs">Filter:</span>
@@ -142,7 +171,7 @@ export function HoldingsTable({ rows }: { rows: HoldingSummary[] }) {
         </TableHeader>
         <TableBody>
           {visibleRows.map((row) => (
-            <TableRow key={row.companyId}>
+            <TableRow key={row.companyId} className="hover:bg-muted/60">
               <TableCell className="font-medium">
                 <div className="flex items-center gap-1.5">
                   <Link href={`/companies/${row.ticker}`} className="hover:underline">
@@ -164,14 +193,18 @@ export function HoldingsTable({ rows }: { rows: HoldingSummary[] }) {
                   ) : null}
                 </div>
               </TableCell>
+              <TableCell className="text-right font-medium tabular-nums">
+                {formatMoney(row.averageCost)}
+              </TableCell>
               <TableCell className="text-right tabular-nums">
                 {row.price === null ? "—" : formatMoney(row.price)}
               </TableCell>
-              <TableCell className={`text-right tabular-nums ${gainLossClassName(row.dailyGainLossPct)}`}>
-                {row.dailyGainLossPct === null ? "—" : formatPercent(row.dailyGainLossPct)}
+              <TableCell className="text-right">
+                <GainPill value={row.dailyGainLossPct}>
+                  {row.dailyGainLossPct === null ? "—" : formatPercent(row.dailyGainLossPct)}
+                </GainPill>
               </TableCell>
               <TableCell className="text-right tabular-nums">{row.quantity}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatMoney(row.averageCost)}</TableCell>
               <TableCell className="text-right tabular-nums">
                 {row.quoteUnavailable ? (
                   <span className="text-muted-foreground">{formatMoney(row.costBasis)} (cost basis)</span>
@@ -179,13 +212,23 @@ export function HoldingsTable({ rows }: { rows: HoldingSummary[] }) {
                   formatMoney(row.marketValue)
                 )}
               </TableCell>
-              <TableCell className={`text-right tabular-nums ${gainLossClassName(row.unrealizedGainLoss)}`}>
-                {row.unrealizedGainLoss === null
-                  ? "—"
-                  : `${formatMoney(row.unrealizedGainLoss)} (${formatPercent(row.unrealizedGainLossPct)})`}
+              <TableCell className="text-right">
+                <GainPill value={row.unrealizedGainLoss}>
+                  {row.unrealizedGainLoss === null
+                    ? "—"
+                    : `${formatMoney(row.unrealizedGainLoss)} (${formatPercent(row.unrealizedGainLossPct)})`}
+                </GainPill>
               </TableCell>
               <TableCell className="text-right tabular-nums">
-                {formatPlainPercent(row.allocationPct)}
+                <div className="flex items-center justify-end gap-2">
+                  <div className="bg-muted h-1.5 w-16 overflow-hidden rounded-full">
+                    <div
+                      className="bg-chart-1 h-full rounded-full"
+                      style={{ width: `${Math.min(100, Math.max(0, Number(row.allocationPct) * 4))}%` }}
+                    />
+                  </div>
+                  {formatPlainPercent(row.allocationPct)}
+                </div>
               </TableCell>
             </TableRow>
           ))}

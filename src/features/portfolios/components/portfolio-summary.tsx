@@ -19,19 +19,27 @@ type PortfolioSummaryCardData = Pick<
   | "concentrationWarnings"
 >;
 
+function gainLossAccent(value: string | null): string {
+  if (value === null || Number(value) === 0) return "bg-muted-foreground";
+  return Number(value) > 0 ? "bg-emerald-500" : "bg-rose-500";
+}
+
 function Stat({
   label,
   value,
   valueClassName,
   badge,
+  accent = "bg-chart-1",
 }: {
   label: string;
   value: string;
   valueClassName?: string;
+  accent?: string;
   badge?: { text: string; title: string };
 }) {
   return (
-    <div>
+    <div className="bg-muted/40 relative overflow-hidden rounded-lg border p-3 pl-4">
+      <span className={`absolute inset-y-0 left-0 w-1 ${accent}`} />
       <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
         {label}
         {badge ? (
@@ -62,10 +70,11 @@ export function PortfolioSummaryCard({ portfolio }: { portfolio: PortfolioSummar
         </CardTitle>
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <Stat label="Invested capital" value={formatMoney(portfolio.investedCapital)} />
+        <Stat label="Invested capital" value={formatMoney(portfolio.investedCapital)} accent="bg-chart-1" />
         <Stat
           label={portfolio.isPartial ? "Est. market value" : "Market value"}
           value={formatMoney(portfolio.estimatedMarketValue)}
+          accent="bg-chart-4"
         />
         <Stat
           label="Unrealized G/L"
@@ -75,16 +84,19 @@ export function PortfolioSummaryCard({ portfolio }: { portfolio: PortfolioSummar
               : `${formatMoney(portfolio.totalUnrealizedGainLoss)} (${formatPercent(portfolio.totalUnrealizedGainLossPct)})`
           }
           valueClassName={gainLossClassName(portfolio.totalUnrealizedGainLoss)}
+          accent={gainLossAccent(portfolio.totalUnrealizedGainLoss)}
         />
         <Stat
           label="Today"
           value={formatMoney(portfolio.totalDailyGainLoss)}
           valueClassName={gainLossClassName(portfolio.totalDailyGainLoss)}
+          accent={gainLossAccent(portfolio.totalDailyGainLoss)}
         />
         <Stat
           label="Realized G/L"
           value={formatMoney(portfolio.totalRealizedGainLoss)}
           valueClassName={gainLossClassName(portfolio.totalRealizedGainLoss)}
+          accent={gainLossAccent(portfolio.totalRealizedGainLoss)}
           badge={
             portfolio.isRealizedGainLossPartial
               ? {
