@@ -20,6 +20,8 @@ import { CandidateTable } from "@/features/signal-convergence/components/candida
 import { SignalConvergenceDisclaimer } from "@/features/signal-convergence/components/disclaimer-banner";
 import { RefreshSignalsButton } from "@/features/signal-convergence/components/refresh-button";
 
+export const metadata = { title: "Signal Convergence" };
+
 function parseWindow(value: string | undefined): SignalWindow {
   const n = Number(value);
   return n === 7 || n === 90 ? n : 30;

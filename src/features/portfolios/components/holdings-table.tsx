@@ -8,7 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { HoldingSummary } from "@/features/portfolios/server/aggregate";
-import { formatMoney, formatPercent, formatPlainPercent } from "@/features/portfolios/lib/format";
+import {
+  formatMoney,
+  formatPercent,
+  formatPlainPercent,
+  gainLossArrow,
+} from "@/features/portfolios/lib/format";
 
 type SortKey =
   | "ticker"
@@ -52,6 +57,7 @@ function GainPill({ value, children }: { value: string | null; children: React.R
     <span
       className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium tabular-nums ${gainPillClassName(value)}`}
     >
+      <span aria-hidden="true">{gainLossArrow(value)}</span>
       {children}
     </span>
   );

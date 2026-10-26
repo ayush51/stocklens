@@ -7,6 +7,8 @@ import { PastEarningsList } from "@/features/earnings/components/past-earnings-l
 import { PageHeader } from "@/shared/components/page-header";
 import { EmptyState } from "@/shared/components/empty-state";
 
+export const metadata = { title: "Earnings" };
+
 export default async function EarningsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");

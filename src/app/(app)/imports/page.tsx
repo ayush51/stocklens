@@ -11,6 +11,8 @@ import { ImportHistory } from "@/features/csv-import/components/import-history";
 import { PageHeader } from "@/shared/components/page-header";
 import { EmptyState } from "@/shared/components/empty-state";
 
+export const metadata = { title: "Imports" };
+
 export default async function ImportsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");

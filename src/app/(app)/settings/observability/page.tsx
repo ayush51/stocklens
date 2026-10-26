@@ -9,6 +9,8 @@ import { PageHeader } from "@/shared/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+export const metadata = { title: "Observability" };
+
 export default async function ObservabilityPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");

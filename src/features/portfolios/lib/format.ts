@@ -28,3 +28,12 @@ export function gainLossClassName(value: string | null): string {
   if (num < 0) return "text-destructive";
   return "text-muted-foreground";
 }
+
+/** Direction glyph so gain/loss isn't conveyed by color alone — "" when flat or unknown. */
+export function gainLossArrow(value: string | null): string {
+  if (value === null) return "";
+  const num = Number(value);
+  if (num > 0) return "▲ ";
+  if (num < 0) return "▼ ";
+  return "";
+}

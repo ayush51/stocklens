@@ -1,7 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { PortfolioAggregate } from "@/features/portfolios/server/aggregate";
-import { formatMoney, formatPercent, gainLossClassName } from "@/features/portfolios/lib/format";
+import {
+  formatMoney,
+  formatPercent,
+  gainLossArrow,
+  gainLossClassName,
+} from "@/features/portfolios/lib/format";
 
 // Accepts a single portfolio's summary (PortfolioSummary) or the
 // cross-portfolio rollup (DashboardSummary) — both are structurally a
@@ -81,20 +86,20 @@ export function PortfolioSummaryCard({ portfolio }: { portfolio: PortfolioSummar
           value={
             portfolio.totalUnrealizedGainLoss === null
               ? "—"
-              : `${formatMoney(portfolio.totalUnrealizedGainLoss)} (${formatPercent(portfolio.totalUnrealizedGainLossPct)})`
+              : `${gainLossArrow(portfolio.totalUnrealizedGainLoss)}${formatMoney(portfolio.totalUnrealizedGainLoss)} (${formatPercent(portfolio.totalUnrealizedGainLossPct)})`
           }
           valueClassName={gainLossClassName(portfolio.totalUnrealizedGainLoss)}
           accent={gainLossAccent(portfolio.totalUnrealizedGainLoss)}
         />
         <Stat
           label="Today"
-          value={formatMoney(portfolio.totalDailyGainLoss)}
+          value={`${gainLossArrow(portfolio.totalDailyGainLoss)}${formatMoney(portfolio.totalDailyGainLoss)}`}
           valueClassName={gainLossClassName(portfolio.totalDailyGainLoss)}
           accent={gainLossAccent(portfolio.totalDailyGainLoss)}
         />
         <Stat
           label="Realized G/L"
-          value={formatMoney(portfolio.totalRealizedGainLoss)}
+          value={`${gainLossArrow(portfolio.totalRealizedGainLoss)}${formatMoney(portfolio.totalRealizedGainLoss)}`}
           valueClassName={gainLossClassName(portfolio.totalRealizedGainLoss)}
           accent={gainLossAccent(portfolio.totalRealizedGainLoss)}
           badge={

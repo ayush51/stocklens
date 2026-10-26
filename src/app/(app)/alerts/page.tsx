@@ -11,6 +11,8 @@ import { EventHistory } from "@/features/alerts/components/event-history";
 import { PageHeader } from "@/shared/components/page-header";
 import { EmptyState } from "@/shared/components/empty-state";
 
+export const metadata = { title: "Alerts" };
+
 export default async function AlertsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");

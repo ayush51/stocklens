@@ -1,13 +1,23 @@
 import Link from "next/link";
+import { LayoutDashboard } from "lucide-react";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { getDashboardSummary } from "@/features/portfolios/server/queries";
 import { PortfolioSummaryCard } from "@/features/portfolios/components/portfolio-summary";
+import { TopMovers } from "@/features/portfolios/components/top-movers";
 import { AllocationChart } from "@/features/portfolios/components/allocation-chart";
 import { PageHeader } from "@/shared/components/page-header";
 import { EmptyState } from "@/shared/components/empty-state";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatMoney, gainLossClassName, formatPercent } from "@/features/portfolios/lib/format";
+import {
+  formatMoney,
+  gainLossArrow,
+  gainLossClassName,
+  formatPercent,
+} from "@/features/portfolios/lib/format";
+
+export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -23,10 +33,11 @@ export default async function DashboardPage() {
           description="A cross-portfolio summary of everything you hold, across every portfolio."
         />
         <EmptyState
+          icon={LayoutDashboard}
           title="No holdings yet"
           description="Add a portfolio and enter transactions, or sync Robinhood positions, from Portfolios."
           action={
-            <Link href="/portfolios" className="text-sm underline">
+            <Link href="/portfolios" className={buttonVariants({ size: "lg" })}>
               Go to Portfolios
             </Link>
           }
@@ -42,6 +53,7 @@ export default async function DashboardPage() {
         description={`Cross-portfolio summary across ${summary.portfolioCount} portfolio${summary.portfolioCount === 1 ? "" : "s"}.`}
       />
       <PortfolioSummaryCard portfolio={summary} />
+      <TopMovers holdings={summary.holdings} />
       <AllocationChart holdings={summary.holdings} />
       {summary.largestPositions.length > 0 ? (
         <Card>
@@ -53,7 +65,7 @@ export default async function DashboardPage() {
               <Link
                 key={holding.companyId}
                 href={`/companies/${holding.ticker}`}
-                className="hover:bg-accent rounded-md border p-3 transition-colors"
+                className="hover:bg-accent focus-visible:ring-ring rounded-md border p-3 transition-colors outline-none focus-visible:ring-2"
               >
                 <p className="font-medium">{holding.ticker}</p>
                 <p className="text-muted-foreground text-xs">{Number(holding.allocationPct).toFixed(1)}%</p>
@@ -62,6 +74,7 @@ export default async function DashboardPage() {
                 </p>
                 {holding.unrealizedGainLossPct !== null ? (
                   <p className={`text-xs tabular-nums ${gainLossClassName(holding.unrealizedGainLoss)}`}>
+                    {gainLossArrow(holding.unrealizedGainLoss)}
                     {formatPercent(holding.unrealizedGainLossPct)}
                   </p>
                 ) : null}

@@ -8,6 +8,8 @@ import { DecisionEntryList } from "@/features/decision-journal/components/decisi
 import { PageHeader } from "@/shared/components/page-header";
 import { EmptyState } from "@/shared/components/empty-state";
 
+export const metadata = { title: "Journal" };
+
 export default async function JournalPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");

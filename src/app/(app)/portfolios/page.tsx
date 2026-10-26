@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Briefcase, RefreshCw } from "lucide-react";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { getPortfoliosForUser } from "@/features/portfolios/server/queries";
@@ -11,6 +12,8 @@ import { RefreshQuotesButton } from "@/features/portfolios/components/refresh-qu
 import { PageHeader } from "@/shared/components/page-header";
 import { EmptyState } from "@/shared/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+export const metadata = { title: "Portfolios" };
 
 export default async function PortfoliosPage() {
   const user = await getCurrentUser();
@@ -35,6 +38,7 @@ export default async function PortfoliosPage() {
 
       {portfolios.length === 0 ? (
         <EmptyState
+          icon={Briefcase}
           title="No portfolios yet"
           description={
             'Create one manually above, or ask Claude, in a session with the robinhood-trading MCP connected, to "sync my portfolio" to pull in your current Robinhood positions.'
@@ -58,6 +62,7 @@ export default async function PortfoliosPage() {
 
             {portfolio.stocks.length === 0 && portfolio.etfs.length === 0 ? (
               <EmptyState
+                icon={portfolio.source === "MANUAL" ? Briefcase : RefreshCw}
                 title="No transactions yet"
                 description={
                   portfolio.source === "MANUAL"

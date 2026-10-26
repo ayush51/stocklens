@@ -6,6 +6,8 @@ import { ThesisOverviewList } from "@/features/thesis/components/thesis-overview
 import { PageHeader } from "@/shared/components/page-header";
 import { EmptyState } from "@/shared/components/empty-state";
 
+export const metadata = { title: "Theses" };
+
 export default async function ThesesOverviewPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");

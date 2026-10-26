@@ -8,6 +8,8 @@ import { WorkspaceSettingsForm } from "@/features/workspace/components/workspace
 import { MemberList } from "@/features/workspace/components/member-list";
 import { PageHeader } from "@/shared/components/page-header";
 
+export const metadata = { title: "Workspace settings" };
+
 export default async function WorkspaceSettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");

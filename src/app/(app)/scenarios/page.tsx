@@ -9,6 +9,8 @@ import { EmptyState } from "@/shared/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+export const metadata = { title: "Scenarios" };
+
 export default async function ScenariosPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
