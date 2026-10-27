@@ -1,8 +1,10 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingNotice } from "@/shared/components/loading-notice";
 
 export default function PortfoliosLoading() {
   return (
     <div className="space-y-6" aria-busy="true" aria-label="Loading">
+      <LoadingNotice>Loading your portfolios and latest prices…</LoadingNotice>
       <div className="space-y-2 border-b pb-4">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-80 max-w-full" />

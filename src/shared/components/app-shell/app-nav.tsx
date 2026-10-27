@@ -1,10 +1,19 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
+import { Loader2 } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 import { NAV_GROUPS, isNavItemActive } from "./nav-items";
+
+/** Spinner shown inside a Link while its navigation is in flight. */
+function PendingSpinner() {
+  const { pending } = useLinkStatus();
+  return pending ? (
+    <Loader2 aria-label="Loading" className="text-primary ml-auto size-3.5 animate-spin" />
+  ) : null;
+}
 
 export function AppNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
@@ -34,6 +43,7 @@ export function AppNav({ onNavigate }: { onNavigate?: () => void }) {
               >
                 <Icon className={cn("size-4 shrink-0", active && "text-primary")} />
                 {item.label}
+                <PendingSpinner />
               </Link>
             );
           })}

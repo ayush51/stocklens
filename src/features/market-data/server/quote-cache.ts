@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import { prismaService } from "@/lib/db/prisma-service";
 import { logger } from "@/lib/logger";
 import type { Quote, MarketDataProvider } from "@/shared/contracts/market-data-provider";
@@ -11,6 +13,24 @@ import type { Quote, MarketDataProvider } from "@/shared/contracts/market-data-p
  * "not loading in time" symptom this cache exists to fix.
  */
 const QUOTE_CACHE_FRESHNESS_MS = 10 * 60 * 1000;
+
+/**
+ * A ticker with no cached row at all has nothing to show, so a page load
+ * waits for its live quote — but only for this many at a time. Finnhub's
+ * pacing means each one costs ~1 second, so the rest are filled in after
+ * the response instead of holding the page hostage for 30+ seconds.
+ */
+const MAX_BLOCKING_LIVE_FETCHES = 6;
+
+/**
+ * Stale (but present) tickers are served as-is and refreshed after the
+ * response; this caps how many one page load queues so a burst of loads
+ * can't build an unbounded backlog behind Finnhub's rate limit.
+ */
+const MAX_BACKGROUND_REFRESHES = 15;
+
+/** Tickers already being refreshed by some earlier request in this instance. */
+const refreshing = new Set<string>();
 
 function toQuote(row: {
   ticker: string;
@@ -68,19 +88,68 @@ async function writeThrough(quote: Quote): Promise<void> {
   }
 }
 
+async function fetchAndStore(tickers: string[], provider: MarketDataProvider): Promise<Map<string, Quote>> {
+  const fetched = await Promise.all(
+    tickers.map(async (ticker) => [ticker, await provider.getQuote(ticker)] as const),
+  );
+
+  const result = new Map<string, Quote>();
+  const writes: Promise<void>[] = [];
+  for (const [ticker, quote] of fetched) {
+    if (!quote) continue;
+    result.set(ticker, quote);
+    writes.push(writeThrough(quote));
+  }
+  await Promise.allSettled(writes);
+  return result;
+}
+
+/**
+ * Refreshes tickers after the response has been sent (Next's after()), so
+ * the visitor who triggered it never waits on Finnhub. Falls back to a
+ * plain fire-and-forget outside a request scope (tests, scripts).
+ */
+function refreshInBackground(tickers: string[], provider: MarketDataProvider): void {
+  const toRefresh = tickers.filter((ticker) => !refreshing.has(ticker)).slice(0, MAX_BACKGROUND_REFRESHES);
+  if (toRefresh.length === 0) return;
+  toRefresh.forEach((ticker) => refreshing.add(ticker));
+
+  const work = async () => {
+    try {
+      await fetchAndStore(toRefresh, provider);
+    } catch (error) {
+      logger.warn("quote_background_refresh_failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      toRefresh.forEach((ticker) => refreshing.delete(ticker));
+    }
+  };
+
+  try {
+    after(work);
+  } catch {
+    void work();
+  }
+}
+
 /**
  * Batch quote lookup backed by QuoteCache. Reads every requested ticker in
- * one query, only calls the live provider (still through its own real
- * rate-limit pacing) for tickers that are missing, stale, or explicitly
- * force-refreshed — so a repeat page load for the same holdings costs one
- * DB query and zero live calls instead of one live call per ticker.
+ * one query and never makes a page wait on the live provider for a quote it
+ * already has:
  *
- * `forceRefresh: true` (the portfolios page's "Refresh now" button) treats
- * every requested ticker as stale regardless of QuoteCache's age, and the
- * fresh result is written back to the same shared, ticker-keyed cache —
- * so any other page reading the same tickers (dashboard, company detail,
- * signal-convergence's price column) sees the refreshed price on its next
- * load too, with no separate propagation step needed.
+ * - fresh rows (under 10 minutes old) are returned as-is;
+ * - stale rows are returned as-is too — the UI already flags old prices
+ *   with a "stale" badge — and refreshed after the response, stalest first;
+ * - tickers with no row at all are fetched live, up to
+ *   MAX_BLOCKING_LIVE_FETCHES; the remainder fill in on a later load.
+ *
+ * `forceRefresh: true` (the portfolios page's "Refresh now" button) is the
+ * one explicit exception: every requested ticker is fetched live and the
+ * caller waits, then the result is written back to the same shared,
+ * ticker-keyed cache — so any other page reading the same tickers
+ * (dashboard, company detail, signal-convergence's price column) sees the
+ * refreshed price on its next load too.
  */
 export async function getCachedQuotes(
   tickers: string[],
@@ -90,37 +159,38 @@ export async function getCachedQuotes(
   const uniqueTickers = Array.from(new Set(tickers));
   if (uniqueTickers.length === 0) return new Map();
 
-  const cached = opts?.forceRefresh
-    ? []
-    : await prismaService.quoteCache.findMany({ where: { ticker: { in: uniqueTickers } } });
+  if (opts?.forceRefresh) {
+    return fetchAndStore(uniqueTickers, provider);
+  }
+
+  const cached = await prismaService.quoteCache.findMany({ where: { ticker: { in: uniqueTickers } } });
 
   const freshCutoff = Date.now() - QUOTE_CACHE_FRESHNESS_MS;
   const result = new Map<string, Quote>();
-  const staleTickers: string[] = [];
+  const staleRows: typeof cached = [];
+  const missingTickers: string[] = [];
 
   const cachedByTicker = new Map(cached.map((row) => [row.ticker, row]));
   for (const ticker of uniqueTickers) {
     const row = cachedByTicker.get(ticker);
-    if (row && row.retrievedAt.getTime() >= freshCutoff) {
-      result.set(ticker, toQuote(row));
-    } else {
-      staleTickers.push(ticker);
+    if (!row) {
+      missingTickers.push(ticker);
+      continue;
     }
+    result.set(ticker, toQuote(row));
+    if (row.retrievedAt.getTime() < freshCutoff) staleRows.push(row);
   }
 
-  if (staleTickers.length === 0) return result;
+  const blocking = missingTickers.slice(0, MAX_BLOCKING_LIVE_FETCHES);
+  const deferred = [
+    ...staleRows.sort((a, b) => a.retrievedAt.getTime() - b.retrievedAt.getTime()).map((row) => row.ticker),
+    ...missingTickers.slice(MAX_BLOCKING_LIVE_FETCHES),
+  ];
 
-  const fetched = await Promise.all(
-    staleTickers.map(async (ticker) => [ticker, await provider.getQuote(ticker)] as const),
-  );
-
-  const writes: Promise<void>[] = [];
-  for (const [ticker, quote] of fetched) {
-    if (!quote) continue;
-    result.set(ticker, quote);
-    writes.push(writeThrough(quote));
+  if (blocking.length > 0) {
+    for (const [ticker, quote] of await fetchAndStore(blocking, provider)) result.set(ticker, quote);
   }
-  await Promise.allSettled(writes);
+  if (deferred.length > 0) refreshInBackground(deferred, provider);
 
   return result;
 }

@@ -11,6 +11,7 @@ import { DisclaimerFooter } from "@/shared/components/disclaimer-footer";
 import { AppNav } from "@/shared/components/app-shell/app-nav";
 import { BrandLogo } from "@/shared/components/app-shell/brand-logo";
 import { MobileNav } from "@/shared/components/app-shell/mobile-nav";
+import { NavigationProgress } from "@/shared/components/app-shell/navigation-progress";
 import { ThemeToggle } from "@/shared/components/app-shell/theme-toggle";
 import { UserMenu } from "@/shared/components/app-shell/user-menu";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <WorkspaceProvider value={{ workspaceId, workspaceName, userEmail: user.email ?? "" }}>
+      <NavigationProgress />
       <div className="flex min-h-screen">
         <aside className="border-border hidden w-56 shrink-0 border-r px-4 py-6 sm:block">
           <div className="mb-6">

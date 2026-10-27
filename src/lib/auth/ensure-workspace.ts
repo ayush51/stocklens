@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { cache } from "react";
 import type { User } from "@supabase/supabase-js";
 
 import { forUser, executeAsUser } from "@/lib/db/rls";
@@ -25,8 +26,21 @@ import { Prisma } from "@/generated/prisma/client";
  * created — a chicken-and-egg case that only a privileged, narrowly-scoped
  * function can resolve. See the bootstrap_workspace_function migration.
  */
-export async function ensureWorkspaceForUser(authUser: User) {
+export const ensureWorkspaceForUser = cache(async function ensureWorkspaceForUser(authUser: User) {
   const prisma = forUser(authUser.id);
+
+  // Fast path for every request after the first: a returning user with a
+  // workspace and an unchanged email needs one read, not an upsert (a write)
+  // plus a second lookup — and the layout and the page both call this, so
+  // cache() above also collapses the pair into one call per request.
+  const known = await prisma.workspaceMember.findFirst({
+    where: { userId: authUser.id },
+    include: { workspace: true, user: { select: { email: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  if (known && known.user.email === (authUser.email ?? `${authUser.id}@unknown.local`)) {
+    return { workspaceId: known.workspace.id, workspaceName: known.workspace.name };
+  }
 
   const user = await prisma.user.upsert({
     where: { id: authUser.id },
@@ -57,4 +71,4 @@ export async function ensureWorkspaceForUser(authUser: User) {
   );
 
   return { workspaceId, workspaceName };
-}
+});
