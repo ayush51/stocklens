@@ -2,6 +2,17 @@
 
 A plug-and-play investment research and thesis-tracking dashboard for any publicly traded company. See [`docs/phase-0/`](./docs/phase-0/README.md) for the full design package (PRD, architecture, database design, security model, implementation plan).
 
+## Screenshots
+
+All screenshots use made-up demo data — no real portfolio or account information.
+
+| | |
+|---|---|
+| ![Dashboard](./docs/screenshots/dashboard.png) **Dashboard** — cross-portfolio summary, concentration warnings, allocation, top movers | ![Portfolios](./docs/screenshots/portfolios.png) **Portfolios** — holdings, cost basis, live prices, unrealized gain/loss |
+| ![Thesis](./docs/screenshots/thesis.png) **Thesis** — why you own a position, target price, invalidation conditions, review date | ![Decision journal](./docs/screenshots/decision-journal.png) **Decision journal** — record the reasoning and emotion behind each buy, add, trim or exit |
+| ![Scenarios](./docs/screenshots/scenarios.png) **Scenario analysis** — what a hypothetical price move does to your positions | ![Signal Convergence](./docs/screenshots/signal-convergence.png) **Signal Convergence** — government contracts, congressional trades and insider transactions in one view |
+| ![Alerts](./docs/screenshots/alerts.png) **Alerts** — price, earnings and thesis-review alerts | |
+
 ## Stack
 
 Next.js 15 (App Router) · TypeScript · Tailwind CSS · shadcn/ui · Prisma · PostgreSQL (Supabase) · Vercel
